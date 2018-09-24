@@ -1,0 +1,22 @@
+[commit]
+    message = n
+[merge]
+    allow = true
+[vrun]
+    silent = false
+    async = false
+[deploy]
+    host = localhost
+    path = ~/myproject/git/ossn/Minds/minds/engine
+[remote "github"]
+    url = git@github.com:huangyingw/engine.git
+    fetch = +refs/heads/*:refs/remotes/github/*
+[push]
+    remote = github
+[gsync]
+    remote = Minds
+    branch = master
+[remote "Minds"]
+    url = https://github.com/Minds/engine
+    fetch = +refs/heads/*:refs/remotes/Minds/*
+
