@@ -19,4 +19,6 @@
 [remote "Minds"]
     url = https://github.com/Minds/engine
     fetch = +refs/heads/*:refs/remotes/Minds/*
-
+[branch "dev"]
+    remote = github
+    merge = refs/heads/dev
