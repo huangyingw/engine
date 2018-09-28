@@ -18,14 +18,23 @@ class Di
      */
     public function get($alias)
     {
+        print("function get --> 1\n");
         if (isset($this->bindings[$alias])) {
+            print("function get --> 2\n");
             $binding = $this->bindings[$alias];
+            print("function get --> 3\n");
             if ($binding->isFactory()) {
+                print("function get --> 4\n");
                 if (!isset($this->factories[$alias])) {
+                    print("function get --> 5\n");
                     $this->factories[$alias] = call_user_func($binding->getFunction(), $this);
+                    print("function get --> 6\n");
                 }
+                print("function get --> 7\n");
+                print("this->factories --> " . print_r($this->factories[$alias]) . "\n");
                 return $this->factories[$alias];
             } else {
+                print("function get --> 8\n");
                 return call_user_func($binding->getFunction(), $this);
             }
         }
@@ -42,8 +51,8 @@ class Di
     public function bind($alias, \Closure $function, array $options = [])
     {
         $options = array_merge([
-          'useFactory' => false,
-          'immutable' => false
+            'useFactory' => false,
+            'immutable' => false
         ], $options);
 
         if ($options['immutable'] && isset($this->bindings[$alias])) {
@@ -51,9 +60,9 @@ class Di
         }
 
         $binding = (new Binding())
-          ->setFunction($function)
-          ->setFactory($options['useFactory'])
-          ->setImmutable($options['immutable']);
+            ->setFunction($function)
+            ->setFactory($options['useFactory'])
+            ->setImmutable($options['immutable']);
         $this->bindings[$alias] = $binding;
     }
 

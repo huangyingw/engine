@@ -22,24 +22,29 @@ class CassandraProvisioner implements ProvisionerInterface
     }
 
     public function provision()
-    {
+    {        
+        print("provision() --> 1\n");
         $config = $this->config->get('cassandra');
+        print("provision() --> 2\n");
 
         $db = $this->db ?: new Data\Call(
             null,
             $config->keyspace,
             $config->servers
         );
+        print("provision() --> 3\n");
 
         if ($db->keyspaceExists()) {
             throw new ProvisionException('Cassandra storage is already provisioned');
         }
+        print("provision() --> 4\n");
 
         $db->createKeyspace([
             'strategy_options' => [
                 'replication_factor' => isset($config->replication_factor) ? $config->replication_factor : '3'
             ]
         ]);
+        print("provision() --> 5\n");
 
         // CQL Tables
 
@@ -322,6 +327,7 @@ class CassandraProvisioner implements ProvisionerInterface
                 'primaryKeys' => ['key']
             ]
         ];
+        print("provision() --> 6\n");
 
         // CQL Materialized Views
 

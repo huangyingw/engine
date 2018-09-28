@@ -44,7 +44,9 @@ class Call
         $this->servers = $servers ?: $CONFIG->cassandra->servers;
         $this->keyspace = $keyspace ?: $CONFIG->cassandra->keyspace;
         $this->cf_name = $cf;
+        print("new Data\Call --> 1\n");
         $this->client = $cql ?: Core\Di\Di::_()->get('Database\Cassandra\Cql');
+        print("new Data\Call --> 2\n");
 
         /*if ($this->keyspace != 'phpspec') {
             $this->ini();
@@ -156,67 +158,67 @@ class Call
      * @param int/string $key - the key (row)
      * @param array $options - by default contains offset and limit for the row
      */
-     public function getRow($key, array $options = array())
-     {
-         self::$reads++;
-         array_push(self::$keys, $key);
+    public function getRow($key, array $options = array())
+    {
+        self::$reads++;
+        array_push(self::$keys, $key);
 
-         $options = array_merge(
-             [
-             'multi' => false,
-             'offset' => "",
-             'finish' => "",
-             'limit' => 500,
-             'reversed' => true
+        $options = array_merge(
+            [
+                'multi' => false,
+                'offset' => "",
+                'finish' => "",
+                'limit' => 500,
+                'reversed' => true
             ], $options);
 
-         $query = new Cassandra\Prepared\Custom();
+        $query = new Cassandra\Prepared\Custom();
 
-         $statement = "SELECT * FROM";
-         $values = [];
+        $statement = "SELECT * FROM";
+        $values = [];
 
-         $statement .= " $this->cf_name WHERE key=?";
-         $values = [ (string) $key ];
+        $statement .= " $this->cf_name WHERE key=?";
+        $values = [ (string) $key ];
 
-         if ($options['offset']) {
-             if ($options['reversed']) {
-                 $statement .= " AND column1 <= ? AND column1 >= ?";
-                 $values[] = (string) $options['offset'];
-                 $values[] = (string) $options['finish'];
-             } else {
-                 $statement .= ' AND column1 >= ?';
-                 $values[] = (string) $options['offset'];
-                 if ($options['finish']) {
-                     $statement .= ' AND column1 <= ?';
-                     $values[] = (string) $options['finish'];
-                 }
-             }
-         }
+        if ($options['offset']) {
+            if ($options['reversed']) {
+                $statement .= " AND column1 <= ? AND column1 >= ?";
+                $values[] = (string) $options['offset'];
+                $values[] = (string) $options['finish'];
+            } else {
+                $statement .= ' AND column1 >= ?';
+                $values[] = (string) $options['offset'];
+                if ($options['finish']) {
+                    $statement .= ' AND column1 <= ?';
+                    $values[] = (string) $options['finish'];
+                }
+            }
+        }
 
-         $statement .= $options['reversed'] ? " ORDER BY column1 DESC" : " ORDER BY column1 ASC";
+        $statement .= $options['reversed'] ? " ORDER BY column1 DESC" : " ORDER BY column1 ASC";
 
-         $query->setOpts([
-             'page_size' => (int) $options['limit'],
-         ]);
-         $query->query($statement, $values);
+        $query->setOpts([
+            'page_size' => (int) $options['limit'],
+        ]);
+        $query->query($statement, $values);
 
-         try {
-             $result = $this->client->request($query);
-         } catch (\Exception $e) {
-	        return null;
-         }
+        try {
+            $result = $this->client->request($query);
+        } catch (\Exception $e) {
+            return null;
+        }
 
         if (!$result) {
             return [];
         }
 
-         $object = [];
-         foreach ($result as $row){
+        $object = [];
+        foreach ($result as $row){
             $row = array_values($row);
             $object[$row[1]] = $row[2];
-         }
-         return $object;
-     }
+        }
+        return $object;
+    }
 
     /**
      * Performs a get requests for multiple keys
@@ -383,7 +385,7 @@ class Call
             $defaults = array(    "comparator_type" => "UTF8Type",
                 "key_validation_class" => 'UTF8Type',
                 "default_validation_class" => 'UTF8Type'
-                );
+            );
             $attrs = array_merge($defaults, $attrs);
 
             $sys->create_column_family($this->keyspace, $name, $attrs);
