@@ -22,3 +22,6 @@
 [branch "dev"]
     remote = github
     merge = refs/heads/dev
+[branch "dev.fix"]
+    remote = github
+    merge = refs/heads/dev.fix
