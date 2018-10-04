@@ -18,6 +18,7 @@ class Di
      */
     public function get($alias)
     {
+        print("alias --> " . $alias . "\n");
         print("function get --> 1\n");
         if (isset($this->bindings[$alias])) {
             print("function get --> 2\n");
@@ -31,7 +32,6 @@ class Di
                     print("function get --> 6\n");
                 }
                 print("function get --> 7\n");
-                print("this->factories --> " . print_r($this->factories[$alias]) . "\n");
                 return $this->factories[$alias];
             } else {
                 print("function get --> 8\n");

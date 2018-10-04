@@ -23,13 +23,16 @@ class Client implements Interfaces\ClientInterface
         $retry_policy = new Driver\RetryPolicy\DowngradingConsistency();
 
         $this->cluster = Driver::cluster()
-           ->withContactPoints(... $options['cql_servers'])
-           ->withLatencyAwareRouting(true)
-           ->withDefaultConsistency(Driver::CONSISTENCY_QUORUM)
-           ->withRetryPolicy(new Driver\RetryPolicy\Logging($retry_policy))
-           ->withPort(9042)
-           ->build();
+            ->withContactPoints(... $options['cql_servers'])
+            ->withLatencyAwareRouting(true)
+            ->withDefaultConsistency(Driver::CONSISTENCY_QUORUM)
+            ->withRetryPolicy(new Driver\RetryPolicy\Logging($retry_policy))
+            ->withPort(9042)
+            ->build();
+        print("options[keyspace] --> " . $options['keyspace'] . "\n");
+        print("options --> " . implode(", ", $options) . "\n");
         $this->session = $this->cluster->connect($options['keyspace']);
+        print("this->session --> " . print_r($this->session) . "\n");
 
         $this->debug = (bool) Core\Di\Di::_()->get('Config')->get('minds_debug');
     }
@@ -40,13 +43,13 @@ class Client implements Interfaces\ClientInterface
         try{
             $statement = $this->session->prepare($cql['string']);
             $future = $this->session->executeAsync(
-              $statement,
-              new Driver\ExecutionOptions(array_merge(
-                  [
-                    'arguments' => $cql['values']
-                  ],
-                  $request->getOpts()
-                  ))
+                $statement,
+                new Driver\ExecutionOptions(array_merge(
+                    [
+                        'arguments' => $cql['values']
+                    ],
+                    $request->getOpts()
+                ))
             );
             if ($silent) {
                 return $future;

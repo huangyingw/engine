@@ -440,6 +440,7 @@ class Call
     public function createKeyspace(array $attrs = array())
     {
         $sys = new SystemManager($this->servers[0]);
+        print("keyspace --> " . $this->keyspace . "\n");
         $keyspace = $sys->create_keyspace($this->keyspace, $attrs);
 
         self::__construct(null, $this->keyspace, $this->servers);
