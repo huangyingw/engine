@@ -13,6 +13,7 @@ php /var/www/Minds/engine/cli.php install \
     --username=minds \
     --password=password \
     --email=minds@minds.com \
+    --email-private-key=/.dev/minds.pem \
     --private-key=/.dev/minds.pem \
     --public-key=/.dev/minds.pub \
     --cassandra-server=cassandra
