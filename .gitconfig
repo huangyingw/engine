@@ -1,0 +1,18 @@
+[commit]
+    message = n
+[merge]
+    allow = true
+[vrun]
+    silent = false
+    async = false
+[remote "github"]
+    url = git@github.com:huangyingw/engine.git
+    fetch = +refs/heads/*:refs/remotes/github/*
+[push]
+    remote = github
+[gsync]
+    remote = origin
+    branch = master
+[branch "dev"]
+    remote = github
+    merge = refs/heads/dev
