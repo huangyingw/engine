@@ -39,7 +39,7 @@ class Sums
     }
 
     /**
-     * Get the nalance
+     * Get the balance
      */
     public function getBalance()
     {
@@ -48,12 +48,15 @@ class Sums
         if ($this->user) {
             $query->query("SELECT 
                 SUM(amount) as balance 
-                FROM blockchain_transactions_by_address
+                FROM blockchain_transactions_mainnet_by_address
                 WHERE user_guid = ?
                 AND wallet_address = 'offchain'", 
                 [
                     new Varint((int) $this->user->guid)
                 ]);
+            $query->setOpts([
+                'consistency' => \Cassandra::CONSISTENCY_ALL
+            ]);
         } else {
             //$query->query("SELECT SUM(amount) as balance from rewards");
         }
@@ -72,9 +75,10 @@ class Sums
         return (string) BigNumber::_($rows[0]['balance']);
     }
 
+
     public function getContractBalance($contract = '', $onlySpend = false)
     {
-        $cql = "SELECT SUM(amount) as balance from blockchain_transactions WHERE user_guid = ? AND wallet_address = ?";
+        $cql = "SELECT SUM(amount) as balance from blockchain_transactions_mainnet WHERE user_guid = ? AND wallet_address = ?";
         $values = [
             new Varint($this->user->guid),
             'offchain',

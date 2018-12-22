@@ -5,13 +5,14 @@
 namespace Minds\Core\Security;
 
 use Minds\Core;
+use Minds\Common\Cookie;
 
 class XSRF
 {
     public static function buildToken()
     {
-        $user = Core\Session::getLoggedinUser();
-        return md5($_SESSION['__elgg_session'] . rand(1000, 9000));
+        $bytes = openssl_random_pseudo_bytes(128);
+        return hash('sha512', $bytes);
     }
 
     public static function validateRequest()
@@ -37,6 +38,14 @@ class XSRF
             return;
         }
         $token = self::buildToken();
-        setcookie('XSRF-TOKEN', $token, 0, '/');
+
+        $cookie = new Cookie();
+        $cookie
+            ->setName('XSRF-TOKEN')
+            ->setValue($token)
+            ->setExpire(0)
+            ->setPath('/')
+            ->setHttpOnly(false) //must be able to read in JS
+            ->create();
     }
 }

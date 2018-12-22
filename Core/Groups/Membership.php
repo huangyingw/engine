@@ -91,6 +91,49 @@ class Membership
     }
 
     /**
+     * Fetch the group owners
+     * @param  array $opts
+     * @return array
+     */
+    public function getOwners(array $opts = [])
+    {
+        $opts = array_merge([
+            'limit' => 12,
+            'offset' => '',
+            'hydrate' => true
+        ], $opts);
+
+        $this->relDB->setGuid($this->group->getGuid());
+
+        $guids = $this->relDB->get('group:owner', [
+            'limit' => $opts['limit'],
+            'offset' => $opts['offset'],
+            'inverse' => true
+        ]);
+
+        // we add the original owner of the group
+        if ($this->group->owner_guid) {
+            $guids[] = $this->group->owner_guid;
+        }
+
+        if ($opts['offset']) {
+            array_shift($guids);
+        }
+
+        if (!$guids) {
+            return [];
+        }
+
+        if (!$opts['hydrate']) {
+            return $guids;
+        }
+
+        $users = Core\Entities::get([ 'guids' => $guids ]);
+
+        return $users;
+    }
+
+    /**
      * Count the group members
      * @return int
      */
@@ -100,7 +143,7 @@ class Membership
             return $count;
         }
         $this->relDB->setGuid($this->group->getGuid());
-        
+
         $count = $this->relDB->countInverse('member');
         $this->cache->set("group:{$this->group->getGuid()}:members:count", $count);
         return $count;
@@ -243,6 +286,9 @@ class Membership
             $done = $this->relDB->create('member', $this->group->getGuid());
             $this->cache->set("group:{$this->group->getGuid()}:isMember:$user_guid", true);
         } else {
+            if ($this->isAwaiting($user_guid)) {
+                throw new GroupOperationException('you have already requested to join');
+            }
             $done = $this->relDB->create('membership_request', $this->group->getGuid());
         }
 
@@ -278,7 +324,9 @@ class Membership
         $user_guid = is_object($user) ? $user->guid : $user;
         $this->relDB->setGuid($user_guid);
 
-        $this->notifications->unmute($user_guid);
+        try {
+            $this->notifications->unmute($user_guid);
+        } catch (\Exception $e) { }
 
         $done = $this->relDB->remove('member', $this->group->getGuid());
 
@@ -326,7 +374,7 @@ class Membership
         if (!$user) {
             return false;
         }
- 
+
         $user_guid = is_object($user) ? $user->guid : $user;
 
         if ($cache && isset($this->memberCache[$user->guid])) {
@@ -337,7 +385,7 @@ class Membership
             $this->memberCache[$user->guid] = (bool) $is;
             return (bool) $is;
         }
-        
+
         $this->relDB->setGuid($user_guid);
 
         $is = $this->relDB->check('member', $this->group->getGuid());
@@ -464,7 +512,7 @@ class Membership
         if (!$user) {
             return false;
         }
-        
+
         $user_guid = is_object($user) ? $user->guid : $user;
         $this->relDB->setGuid($user_guid);
 
@@ -542,7 +590,7 @@ class Membership
         return $done;
     }
 
-    // 
+    //
 
     public function refreshUserMembership($user, array $addGroupGuids = [], array $removeGroupGuids = [])
     {
@@ -565,7 +613,7 @@ class Membership
         $membership = $user->getGroupMembership();
         $membership = array_merge($membership, $addGroupGuids); // add
         $membership = array_diff($membership, $removeGroupGuids); // remove
-        
+
         $user->context('search');
         $user->setGroupMembership(array_values($membership));
         $user->save();

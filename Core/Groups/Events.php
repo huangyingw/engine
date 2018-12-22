@@ -24,7 +24,7 @@ class Events
             }
         });
 
-        Dispatcher::register('acl:read', 'activity', function ($e) {
+        Dispatcher::register('acl:read', 'all', function ($e) {
             $params = $e->getParameters();
             $entity = $params['entity'];
             $access_id = $entity->access_id;
@@ -39,7 +39,7 @@ class Events
             }
         });
 
-        Dispatcher::register('acl:write', 'activity', function ($e) {
+        Dispatcher::register('acl:write', 'all', function ($e) {
             $params = $e->getParameters();
             $entity = $params['entity'];
             $user = $params['user'];
@@ -50,7 +50,7 @@ class Events
                 return;
             }
 
-            $e->setResponse($group->isOwner($user->guid) && $group->isMember($user->guid));
+            $e->setResponse(($group->isOwner($user->guid) || $group->isModerator($user->guid)) && $group->isMember($user->guid));
         });
 
         Dispatcher::register('delete', 'activity', function ($e) {
@@ -85,7 +85,19 @@ class Events
             $group = $params['entity'];
             $user = $params['user'];
 
-            $e->setResponse($group->isOwner($user->guid) && $group->isMember($user->guid));
+            $isOwner = $group->isOwner($user->guid);
+            $isModerator = $group->isModerator($user->guid);
+            $isMember = $group->isMember($user->guid);
+
+            if ($isOwner && $isMember) {
+                $e->setResponse(true);
+                return;
+            } elseif ($isModerator && $isMember) {
+                $e->setResponse(true);
+                return;
+            }
+
+            $e->setResponse(false);
         });
 
         Dispatcher::register('acl:write:container', 'group', function ($e) {
@@ -128,17 +140,6 @@ class Events
                     ->setGroup($group)
                     ->queue($activity);
             }
-        });
-
-        Dispatcher::register('notification:dispatch', 'group', function ($e) {
-            $params = $e->getParameters();
-
-            $group = new GroupEntity();
-            $group->loadFromGuid($params['entity']);
-
-            $notifications = (new Notifications)->setGroup($group);
-            $e->setResponse($notifications->send($params['params']));
-            echo "[]: sent to $group->guid \n";
         });
 
         Dispatcher::register('cleanup:dispatch', 'group', function ($e) {

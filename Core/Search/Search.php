@@ -20,6 +20,9 @@ class Search
     /** @var string $esIndex */
     protected $esIndex;
 
+    /** @var string $tagsIndex */
+    protected $tagsIndex;
+
     /** @var array $allowedTypes */
     protected $allowedTypes = [
         'activity',
@@ -40,6 +43,7 @@ class Search
     {
         $this->client = $client ?: Di::_()->get('Database\ElasticSearch');
         $this->esIndex = $index ?: Di::_()->get('Config')->elasticsearch['index'];
+        $this->tagsIndex = $index ?: Di::_()->get('Config')->elasticsearch['tags_index'];
     }
 
     /**
@@ -62,7 +66,8 @@ class Search
             'mature' => false,
             'paywall' => null,
             'license' => null,
-            'sort' => null
+            'sort' => null,
+            'rating' => 1,
         ], $options);
 
         // Initial parameters
@@ -127,6 +132,7 @@ class Search
             $filters['license'] = $options['license'];
         }
 
+
         // Sorting
 
         if ($options['sort'] == 'latest') {
@@ -135,13 +141,25 @@ class Search
             $params['sort'] = [
                 [ '@timestamp' => 'desc' ]
             ];
+            $prepared->setRange([
+                [
+                    'rating' => [
+                        'lte' => $options['rating'],
+                    ]   
+                ]
+            ]);
         } elseif ($options['sort'] == 'top') {
             $match['fields'] = [ 'name^6', 'title^8', 'message^8', 'username^8', 'tags^64'  ];
             $prepared->setRange([
                 [ 
                     'interactions' => [
                         'gt' => '0'
-                        ]
+                    ]
+                ],
+                [
+                    'rating' => [
+                        'lte' => $options['rating'],
+                    ]
                 ],
                 [
                     '@timestamp' => [
@@ -182,9 +200,13 @@ class Search
         ];
 
         // TODO: implement $taxonomy
+        $index = $this->esIndex;
+        if ($taxonomy === 'tags') {
+            $index = $this->tagsIndex;
+        }
 
         $prepared = new Prepared\Suggest();
-        $prepared->query($this->esIndex, $query, $params);
+        $prepared->query($index, $query, $params);
 
         $results = $this->client->request($prepared);
 

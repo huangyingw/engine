@@ -105,6 +105,8 @@ class EntityMappingSpec extends ObjectBehavior
         $entity->get('blurb')->willReturn('PHPSpec Blurb');
         $entity->get('description')->willReturn('PHPSpec Description');
         $entity->get('paywall')->willReturn(false);
+        $entity->get('tags')->willReturn(['test', 'hashtag']);
+        $entity->get('rating')->willReturn(1);
 
         $this
             ->setEntity($entity)
@@ -129,10 +131,11 @@ class EntityMappingSpec extends ObjectBehavior
                 'blurb' => 'PHPSpec Blurb',
                 'description' => 'PHPSpec Description',
                 'paywall' => false,
+                'rating' => 1,
                 '@timestamp' => $now * 1000,
                 'taxonomy' => 'entity',
                 'public' => true,
-                'tags' => [ 'test', 'hashtag' ]
+                'tags' => [ 'test', 'hashtag' ],
             ]);
     }
 

@@ -14,9 +14,11 @@ use Minds\Core\Security;
 use Minds\Entities;
 use Minds\Entities\Activity;
 use Minds\Helpers;
+use Minds\Entities\Factory as EntitiesFactory;
 use Minds\Helpers\Counters;
 use Minds\Interfaces;
 use Minds\Interfaces\Flaggable;
+use Minds\Core\Di\Di;
 
 class newsfeed implements Interfaces\Api
 {
@@ -39,6 +41,13 @@ class newsfeed implements Interfaces\Api
         switch ($pages[0]) {
             case 'single':
                 $activity = new Activity($pages[1]);
+
+                if (!Security\ACL::_()->read($activity)) {
+                    return Factory::response([
+                        'status' => 'error',
+                        'message' => 'You do not have permission to view this post'
+                    ]);
+                }
 
                 if (!$activity->guid || Helpers\Flags::shouldFail($activity)) {
                     return Factory::response(['status' => 'error']);
@@ -146,27 +155,20 @@ class newsfeed implements Interfaces\Api
             'limit' => get_input('limit', 5),
             'offset' => get_input('offset', '')
         ), $options));
-        if (get_input('offset') && !get_input('prepend')) { // don't shift if we're prepending to newsfeed
+        if (get_input('offset') && !get_input('prepend') && $activity) { // don't shift if we're prepending to newsfeed
             array_shift($activity);
         }
 
-        $loadPrevious = (string)current($activity)->guid;
+        $loadPrevious = $activity ? (string) current($activity)->guid : '';
 
         //   \Minds\Helpers\Counters::incrementBatch($activity, 'impression');
 
-        $disabledBoost = Core\Session::getLoggedinUser()->plus && Core\Session::getLoggedinUser()->disabled_boost;
-        //$disabledBoost = true;
-
-        if (get_input('platform') == 'ios') {
-            $disabledBoost = true;
-        }
-
-        if ($pages[0] == 'network' && !get_input('prepend') && !$disabledBoost && get_input('offset')) { // No boosts when prepending
+        if ($this->shouldPrependBoosts($pages)) {
             try {
-                //$limit = isset($_GET['access_token']) || $_GET['offset'] ? 2 : 1;
-                $limit = 2;
+                $limit = isset($_GET['access_token']) && $_GET['offset'] ? 2 : 1;
+                //$limit = 2;
                 $cacher = Core\Data\cache\factory::build('apcu');
-                $offset =  $cacher->get(Core\Session::getLoggedinUser()->guid . ':boost-offset:newsfeed');    
+                $offset =  $cacher->get(Core\Session::getLoggedinUser()->guid . ':boost-offset:newsfeed');
 
                 /** @var Core\Boost\Network\Iterator $iterator */
                 $iterator = Core\Di\Di::_()->get('Boost\Network\Iterator');
@@ -231,13 +233,15 @@ class newsfeed implements Interfaces\Api
             if ($pinned_guids) {
                 $response['pinned'] = [];
                 $entities = Core\Entities::get(['guids' => $pinned_guids]);
-                foreach ($entities as $entity) {
-                    $exported = $entity->export();
-                    $exported['pinned'] = true;
-                    $response['pinned'][] = $exported;
 
+                if ($entities) {
+                    foreach ($entities as $entity) {
+                        $exported = $entity->export();
+                        $exported['pinned'] = true;
+                        $response['pinned'][] = $exported;
+                    }
                 }
-//                $response['pinned'] = Factory::Exportable();
+
             }
 
             $response['activity'] = factory::exportable($activity, ['boosted', 'boosted_guid'], true);
@@ -311,8 +315,9 @@ class newsfeed implements Interfaces\Api
                         switch ($embeded->subtype) {
                             case 'blog':
                                 if ($embeded->owner_guid == Core\Session::getLoggedInUserGuid()) {
-                                    $activity->setTitle($embeded->title)
-                                        ->setBlurb(strip_tags($embeded->description))
+                                    /** @var Core\Blogs\Blog $embeded */
+                                    $activity->setTitle($embeded->getTitle())
+                                        ->setBlurb(strip_tags($embeded->getBody()))
                                         ->setURL($embeded->getURL())
                                         ->setThumbnail($embeded->getIconUrl())
                                         ->setFromEntity($embeded)
@@ -345,17 +350,20 @@ class newsfeed implements Interfaces\Api
                                         ->save();
                                 } else {
                                     $activity = new Activity();
-                                    $activity->setRemind((new Activity())
-                                        ->setTimeCreated($embeded->time_created)
-                                        ->setFromEntity($embeded)
-                                        ->setCustom('video', [
-                                            'thumbnail_src' => $embeded->getIconUrl(),
-                                            'guid' => $embeded->guid,
-                                            'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false
-                                        ])
-                                        ->setTitle($embeded->title)
-                                        ->setBlurb($embeded->description)
-                                        ->export())
+                                    $activity->setRemind(
+                                        (new Activity())
+                                            ->setTimeCreated($embeded->time_created)
+                                            ->setFromEntity($embeded)
+                                            ->setCustom('video', [
+                                                'thumbnail_src' => $embeded->getIconUrl(),
+                                                'guid' => $embeded->guid,
+                                                'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false
+                                            ])
+                                            ->setMature($embeded instanceof Flaggable ? $embeded->getFlag('mature') : false)
+                                            ->setTitle($embeded->title)
+                                            ->setBlurb($embeded->description)
+                                            ->export()
+                                        )
                                         ->setMessage($message)
                                         ->save();
                                 }
@@ -375,25 +383,28 @@ class newsfeed implements Interfaces\Api
                                         ->setMessage($message)
                                         ->save();
                                 } else {
-                                    $activity->setRemind((new Activity())
-                                        ->setTimeCreated($embeded->time_created)
-                                        ->setCustom('batch', [[
-                                            'src' => elgg_get_site_url() . 'fs/v1/thumbnail/' . $embeded->guid,
-                                            'href' => elgg_get_site_url() . 'media/' . $embeded->container_guid . '/' . $embeded->guid,
-                                            'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false,
-                                            'width' => $embeded->width,
-                                            'height' => $embeded->height,
-                                        ]])
-                                        ->setFromEntity($embeded)
-                                        ->setTitle($embeded->title)
-                                        ->setBlurb($embeded->description)
-                                        ->export())
+                                    $activity->setRemind(
+                                        (new Activity())
+                                            ->setTimeCreated($embeded->time_created)
+                                            ->setCustom('batch', [[
+                                                'src' => elgg_get_site_url() . 'fs/v1/thumbnail/' . $embeded->guid,
+                                                'href' => elgg_get_site_url() . 'media/' . $embeded->container_guid . '/' . $embeded->guid,
+                                                'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false,
+                                                'width' => $embeded->width,
+                                                'height' => $embeded->height,
+                                            ]])
+                                            ->setMature($embeded instanceof Flaggable ? $embeded->getFlag('mature') : false)
+                                            ->setFromEntity($embeded)
+                                            ->setTitle($embeded->title)
+                                            ->setBlurb($embeded->description)
+                                            ->export()
+                                        )
                                         ->setMessage($message)
                                         ->save();
                                 }
                                 break;
                         }
-                }   
+                }
 
                 $event = new Core\Analytics\Metrics\Event();
                 $event->setType('action')
@@ -412,15 +423,15 @@ class newsfeed implements Interfaces\Api
                     ($embeded instanceof Flaggable ? $embeded->getFlag('mature') : false) ||
                     (isset($embeded->remind_object['mature']) && $embeded->remind_object['mature']);
 
-                $user = Core\Session::getLoggedInUser();
-                if (!$user->getMatureContent() && $mature_remind) {
-                    $user->setMatureContent(true);
-                    $user->save();
-                }
-
                 if ($embeded->owner_guid != Core\Session::getLoggedinUser()->guid) {
                     Helpers\Wallet::createTransaction($embeded->owner_guid, 5, $activity->guid, 'Remind');
                 }
+
+                // Follow activity
+                (new Core\Notification\PostSubscriptions\Manager())
+                    ->setEntityGuid($activity->guid)
+                    ->setUserGuid(Core\Session::getLoggedInUserGuid())
+                    ->follow();
 
                 return Factory::response(array('guid' => $activity->guid));
                 break;
@@ -432,9 +443,6 @@ class newsfeed implements Interfaces\Api
                     $user->addPinned($activity->guid);
                     $user->save();
 
-                    Core\Session::regenerate(false);
-                    //sync our changes to other sessions
-                    (new Core\Data\Sessions())->syncAll($user->guid);
                     return Factory::response([]);
                 }
                 break;
@@ -446,9 +454,6 @@ class newsfeed implements Interfaces\Api
                     $user->removePinned($activity->guid);
                     $user->save();
 
-                    Core\Session::regenerate(false);
-                    //sync our changes to other sessions
-                    (new Core\Data\Sessions())->syncAll($user->guid);
                     return Factory::response([]);
                 }
                 break;
@@ -476,10 +481,13 @@ class newsfeed implements Interfaces\Api
                         $activity->setMature($_POST['mature']);
                     }
 
+                    if (isset($_POST['tags'])) {
+                        $activity->setTags($_POST['tags']);
+                    }
+
                     $user = Core\Session::getLoggedInUser();
-                    if (!$user->getMatureContent() && isset($_POST['mature']) && $_POST['mature']) {
-                        $user->setMatureContent(true);
-                        $user->save();
+                    if ($user->isMature()) {
+                        $activity->setMature(true);
                     }
 
                     if (isset($_POST['wire_threshold'])) {
@@ -513,9 +521,8 @@ class newsfeed implements Interfaces\Api
                 $activity->setMature(isset($_POST['mature']) && !!$_POST['mature']);
 
                 $user = Core\Session::getLoggedInUser();
-                if (!$user->getMatureContent() && isset($_POST['mature']) && $_POST['mature']) {
-                    $user->setMatureContent(true);
-                    $user->save();
+                if ($user->isMature()) {
+                    $activity->setMature(true);
                 }
 
                 if (isset($_POST['access_id'])) {
@@ -529,7 +536,7 @@ class newsfeed implements Interfaces\Api
                 if (isset($_POST['title']) && $_POST['title']) {
                     $activity->setTitle(rawurldecode($_POST['title']))
                         ->setBlurb(rawurldecode($_POST['description']))
-                        ->setURL(\elgg_normalize_url(rawurldecode($_POST['url'])))
+                        ->setURL(rawurldecode($_POST['url']))
                         ->setThumbnail($_POST['thumbnail']);
                 }
 
@@ -550,6 +557,14 @@ class newsfeed implements Interfaces\Api
                     if (!$attachment) {
                         break;
                     }
+
+                    if ((string) $attachment->owner_guid !== (string) Core\Session::getLoggedinUser()->guid) {
+                        return Factory::response([
+                            'status' => 'error',
+                            'message' => 'You are not the owner of this attachment'
+                        ]);
+                    }
+
                     $attachment->title = $activity->message;
                     $attachment->access_id = 2;
 
@@ -597,6 +612,7 @@ class newsfeed implements Interfaces\Api
                                 ->setTitle($attachment->message);
                             break;
                     }
+
                 }
 
                 $container = null;
@@ -611,10 +627,22 @@ class newsfeed implements Interfaces\Api
                         "activity:network:$activity->owner_guid"
                     ];
 
+                    $cache = Di::_()->get('Cache');
+                    $cache->destroy("activity:container:$activity->container_guid");
+
                     Core\Events\Dispatcher::trigger('activity:container:prepare', $container->type, [
                         'container' => $container,
                         'activity' => $activity,
                     ]);
+
+                    if ($activity->getPending() && $attachment) {
+                        $attachment->access_id = 0;
+                        $attachment->save();
+                    }
+                }
+
+                if (isset($_POST['tags'])) {
+                    $activity->setTags($_POST['tags']);
                 }
 
                 try {
@@ -641,11 +669,25 @@ class newsfeed implements Interfaces\Api
                         ),
                         'data' => array(
                             'message' => rawurldecode($_POST['message']),
-                            'perma_url' => isset($_POST['url']) ? \elgg_normalize_url(rawurldecode($_POST['url'])) : \elgg_normalize_url($activity->getURL()),
+                            'perma_url' => isset($_POST['url']) ? rawurldecode($_POST['url']) : $activity->getURL(),
                             'thumbnail_src' => isset($_POST['thumbnail']) ? rawurldecode($_POST['thumbnail']) : null,
                             'description' => isset($_POST['description']) ? rawurldecode($_POST['description']) : null
                         )
                     ));
+
+                    // Follow activity
+                    (new Core\Notification\PostSubscriptions\Manager())
+                        ->setEntityGuid($activity->guid)
+                        ->setUserGuid(Core\Session::getLoggedInUserGuid())
+                        ->follow();
+
+                    if (isset($attachment) && $attachment) {
+                        // Follow attachment
+                        (new Core\Notification\PostSubscriptions\Manager())
+                            ->setEntityGuid($attachment->guid)
+                            ->setUserGuid(Core\Session::getLoggedInUserGuid())
+                            ->follow();
+                    }
 
                     if ($container) {
                         Core\Events\Dispatcher::trigger('activity:container', $container->type, [
@@ -704,7 +746,6 @@ class newsfeed implements Interfaces\Api
     public function delete($pages)
     {
         $activity = new Activity($pages[0]);
-
         if (!$activity->guid) {
             return Factory::response(array('status' => 'error', 'message' => 'could not find activity post'));
         }
@@ -712,7 +753,6 @@ class newsfeed implements Interfaces\Api
         if (!$activity->canEdit()) {
             return Factory::response(array('status' => 'error', 'message' => 'you don\'t have permission'));
         }
-
         /** @var Entities\User $owner */
         $owner = $activity->getOwnerEntity();
 
@@ -751,5 +791,41 @@ class newsfeed implements Interfaces\Api
         }
 
         return Factory::response(array('status' => 'error', 'message' => 'could not delete'));
+    }
+
+    /**
+     * To show boosts or not
+     * @param array $pages
+     * @return bool
+     */
+    protected function shouldPrependBoosts($pages = [])
+    {
+        //Plus Users -> NO
+        $disabledBoost = Core\Session::getLoggedinUser()->plus && Core\Session::getLoggedinUser()->disabled_boost;
+        if ($disabledBoost) {
+            return false;
+        }
+
+        //Prepending posts -> NO
+        if (isset($_GET['prepend'])) {
+            return false;
+        }
+
+        //Not a network feed -> NO
+        if ($pages[0] != 'network') {
+            return false;
+        }
+
+        //Offset - YES
+        if (isset($_GET['offset']) && $_GET['offset']) {
+            return true;
+        }
+
+        //Mobile - YES
+        if (isset($_GET['access_token'])) {
+            return true;
+        }
+
+        return false;
     }
 }

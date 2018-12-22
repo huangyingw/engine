@@ -79,6 +79,12 @@ class wallet implements Interfaces\Api
                     'boostCap' => (string) $boostCap
                 ];
 
+                if (!Session::getLoggedinUser()->getPhoneNumberHash()) {
+                    $testnetBalance = Di::_()->get('Blockchain\Wallets\OffChain\TestnetBalance');
+                    $testnetBalance->setUser(Session::getLoggedinUser());
+                    $response['testnetBalance'] = $testnetBalance->get();
+                }
+
                 break;
         }
 
@@ -109,14 +115,6 @@ class wallet implements Interfaces\Api
         $user = Session::getLoggedinUser();
         $user->setEthWallet($_POST['address']);
         $user->save();
-
-        try {
-            (new Incentive())
-                ->setUser($user)
-                ->send();
-        } catch (\Exception $e) {
-            error_log('[OnChain/Incentive] ' . $e->getMessage());
-        }
 
         return Factory::response([]);
     }

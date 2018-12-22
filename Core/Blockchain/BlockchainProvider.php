@@ -44,10 +44,14 @@ class BlockchainProvider extends Provider
 
         $this->di->bind('Blockchain\Services\Ethereum', function () {
             return new Services\Ethereum();
-        });
+        }, [ 'useFactory' => true ]);
 
         $this->di->bind('Blockchain\Wallets\OffChain\Balance', function () {
             return new Wallets\OffChain\Balance();
+        });
+
+        $this->di->bind('Blockchain\Wallets\OffChain\TestnetBalance', function () {
+            return new Wallets\OffChain\TestnetBalance();
         });
 
         $this->di->bind('Blockchain\Wallets\OffChain\Transactions', function () {
@@ -72,6 +76,22 @@ class BlockchainProvider extends Provider
 
         $this->di->bind('Blockchain\Rates', function () {
             return new Services\CoinMarketCap();
+        });
+
+        $this->di->bind('Blockchain\Purchase\Manager', function () {
+            return new Purchase\Manager();
+        });
+
+        $this->di->bind('Blockchain\Purchase\Repository', function () {
+            return new Purchase\Repository();
+        });
+
+        $this->di->bind('Blockchain\Purchase\Sums', function () {
+            return new Purchase\Sums();
+        });
+
+        $this->di->bind('Blockchain\GasPrice', function () {
+            return new GasPrice();
         });
     }
 }

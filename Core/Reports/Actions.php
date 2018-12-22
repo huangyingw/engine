@@ -8,6 +8,30 @@ use Minds\Core\Events\Dispatcher;
 
 class Actions
 {
+    /** @var Core\Entities\Actions\Save */
+    protected $saveAction;
+
+    /** @var Core\Reports\Repository */
+    protected $repository;
+
+    /** @var Entities\Factory */
+    protected $entitiesFactory;
+
+    /** @var Core\Events\EventsDispatcher */
+    protected $dispatcher;
+
+    public function __construct(
+        $saveAction = null,
+        $repository = null,
+        $entitiesFactory = null,
+        $dispatcher = null
+    ) {
+        $this->saveAction = $saveAction ?: new Core\Entities\Actions\Save();
+        $this->repository = $repository ?: Di::_()->get('Reports\Repository');
+        $this->entitiesFactory = $entitiesFactory ?: Di::_()->get('Entities\Factory');
+        $this->dispatcher = $dispatcher ?: Di::_()->get('EventsDispatcher');
+    }
+
     /**
      * @param string|int $guid
      * @return bool
@@ -18,10 +42,7 @@ class Actions
             return false;
         }
 
-        /** @var Core\Reports\Repository $repository */
-        $repository = Di::_()->get('Reports\Repository');
-
-        $done = $repository->update($guid, [
+        $done = $this->repository->update($guid, [
             'state' => 'archived'
         ]);
 
@@ -30,6 +51,7 @@ class Actions
 
     /**
      * @param string|int $guid
+     * @param string
      * @return bool
      * @throws \Exception
      */
@@ -39,10 +61,7 @@ class Actions
             return false;
         }
 
-        /** @var Core\Reports\Repository $repository */
-        $repository = Di::_()->get('Reports\Repository');
-
-        $report = $repository->getRow($guid);
+        $report = $this->repository->getRow($guid);
 
         if (!$report) {
             return false;
@@ -52,7 +71,8 @@ class Actions
             $report->setReason($reason);
         }
 
-        $entity = Entities\Factory::build($report->getEntityGuid()); // Most updated version
+        $entityId = $report->getEntityLuid() ?: $report->getEntityGuid();
+        $entity = $this->entitiesFactory->build($entityId); // Most updated version
 
         if (!$entity) {
             throw new \Exception('Entity not found');
@@ -62,7 +82,9 @@ class Actions
         $dirty = $this->setMatureFlag($entity, true);
 
         if ($dirty) {
-            $entity->save();
+            $this->saveAction
+                ->setEntity($entity)
+                ->save();
         }
 
         // Attachment and/or embedded entity
@@ -70,19 +92,21 @@ class Actions
 
         foreach ($props as $prop) {
             if ($entity->{$prop}) {
-                $rel = Entities\Factory::build($entity->{$prop});
+                $rel = $this->entitiesFactory->build($entity->{$prop});
 
                 if ($rel) {
                     $dirty = $this->setMatureFlag($rel, true);
 
                     if ($dirty) {
-                        $rel->save();
+                        $this->saveAction
+                            ->setEntity($rel)
+                            ->save();
                     }
                 }
             }
         }
 
-        Dispatcher::trigger('notification', 'all', [
+        $this->dispatcher->trigger('notification', 'all', [
             'to'=> [$entity->owner_guid],
             'from' => 100000000000000519,
             'notification_view' => 'report_actioned',
@@ -92,7 +116,7 @@ class Actions
             ]
         ]);
 
-        $success = $repository->update($guid, [
+        $success = $this->repository->update($guid, [
             'state' => 'actioned',
             'action' => 'explicit',
             'reason' => (string) $report->getReason(),
@@ -103,6 +127,7 @@ class Actions
 
     /**
      * @param string|int $guid
+     * @param string
      * @return bool
      * @throws \Exception
      */
@@ -112,10 +137,7 @@ class Actions
             return false;
         }
 
-        /** @var Core\Reports\Repository $repository */
-        $repository = Di::_()->get('Reports\Repository');
-
-        $report = $repository->getRow($guid);
+        $report = $this->repository->getRow($guid);
 
         if (!$report) {
             return false;
@@ -125,7 +147,8 @@ class Actions
             $report->setReason($reason);
         }
 
-        $entity = Entities\Factory::build($report->getEntityGuid()); // Most updated version
+        $entityId = $report->getEntityLuid() ?: $report->getEntityGuid();
+        $entity = $this->entitiesFactory->build($entityId); // Most updated version
 
         if (!$entity) {
             throw new \Exception('Entity not found');
@@ -135,7 +158,9 @@ class Actions
         $dirty = $this->setSpamFlag($entity, true);
 
         if ($dirty) {
-            $entity->save();
+            $this->saveAction
+                ->setEntity($entity)
+                ->save();
         }
 
         // Attachment and/or embedded entity
@@ -143,19 +168,21 @@ class Actions
 
         foreach ($props as $prop) {
             if ($entity->{$prop}) {
-                $rel = Entities\Factory::build($entity->{$prop});
+                $rel = $this->entitiesFactory->build($entity->{$prop});
 
                 if ($rel) {
                     $dirty = $this->setSpamFlag($rel, true);
 
                     if ($dirty) {
-                        $rel->save();
+                        $this->saveAction
+                            ->setEntity($rel)
+                            ->save();
                     }
                 }
             }
         }
 
-        Dispatcher::trigger('notification', 'all', [
+        $this->dispatcher->trigger('notification', 'all', [
             'to'=> [$entity->owner_guid],
             'from' => 100000000000000519,
             'notification_view' => 'report_actioned',
@@ -165,7 +192,7 @@ class Actions
             ]
         ]);
 
-        $success = $repository->update($guid, [
+        $success = $this->repository->update($guid, [
             'state' => 'actioned',
             'action' => 'spam',
             'reason' => (string) $report->getReason(),
@@ -176,6 +203,7 @@ class Actions
 
     /**
      * @param string|int $guid
+     * @param string
      * @return bool
      * @throws \Exception
      */
@@ -185,10 +213,7 @@ class Actions
             return false;
         }
 
-        /** @var Core\Reports\Repository $repository */
-        $repository = Di::_()->get('Reports\Repository');
-
-        $report = $repository->getRow($guid);
+        $report = $this->repository->getRow($guid);
 
         if (!$report) {
             return false;
@@ -198,7 +223,8 @@ class Actions
             $report->setReason($reason);
         }
 
-        $entity = Entities\Factory::build($report->getEntityGuid()); // Most updated version
+        $entityId = $report->getEntityLuid() ?: $report->getEntityGuid();
+        $entity = $this->entitiesFactory->build($entityId); // Most updated version
 
         if (!$entity) {
             throw new \Exception('Entity not found');
@@ -208,7 +234,9 @@ class Actions
         $dirty = $this->setDeletedFlag($entity, true);
 
         if ($dirty) {
-            $entity->save();
+            $this->saveAction
+                ->setEntity($entity)
+                ->save();
         }
 
         // Attachment and/or embedded entity
@@ -216,19 +244,21 @@ class Actions
 
         foreach ($props as $prop) {
             if ($entity->{$prop}) {
-                $rel = Entities\Factory::build($entity->{$prop});
+                $rel = $this->entitiesFactory->build($entity->{$prop});
 
                 if ($rel) {
                     $dirty = $this->setDeletedFlag($rel, true);
 
                     if ($dirty) {
-                        $rel->save();
+                        $this->saveAction
+                            ->setEntity($rel)
+                            ->save();
                     }
                 }
             }
         }
 
-        Dispatcher::trigger('notification', 'all', [
+        $this->dispatcher->trigger('notification', 'all', [
             'to'=> [$entity->owner_guid],
             'from' => 100000000000000519,
             'notification_view' => 'report_actioned',
@@ -238,7 +268,7 @@ class Actions
             ]
         ]);
 
-        $success = $repository->update($guid, [
+        $success = $this->repository->update($guid, [
             'state' => 'actioned',
             'action' => 'delete',
             'reason' => (string) $report->getReason(),
@@ -258,7 +288,8 @@ class Actions
             return false;
         }
 
-        $entity = Entities\Factory::build($report->getEntityGuid()); // Most updated version
+        $entityId = $report->getEntityLuid() ?: $report->getEntityGuid();
+        $entity = $this->entitiesFactory->build($entityId); // Most updated version
 
         if (!$entity) {
             throw new \Exception('Entity not found');
@@ -270,7 +301,9 @@ class Actions
                 $dirty = $this->setMatureFlag($entity, false);
 
                 if ($dirty) {
-                    $entity->save();
+                    $this->saveAction
+                        ->setEntity($entity)
+                        ->save();
                 }
 
                 // Attachment and/or embedded entity
@@ -278,13 +311,15 @@ class Actions
 
                 foreach ($props as $prop) {
                     if ($entity->{$prop}) {
-                        $rel = Entities\Factory::build($entity->{$prop});
+                        $rel = $this->entitiesFactory->build($entity->{$prop});
 
                         if ($rel) {
                             $dirty = $this->setSpamFlag($rel, false);
 
                             if ($dirty) {
-                                $rel->save();
+                                $this->saveAction
+                                    ->setEntity($rel)
+                                    ->save();
                             }
                         }
                     }
@@ -296,7 +331,9 @@ class Actions
                 $dirty = $this->setSpamFlag($entity, false);
 
                 if ($dirty) {
-                    $entity->save();
+                    $this->saveAction
+                        ->setEntity($entity)
+                        ->save();
                 }
 
                 // Attachment and/or embedded entity
@@ -304,13 +341,15 @@ class Actions
 
                 foreach ($props as $prop) {
                     if ($entity->{$prop}) {
-                        $rel = Entities\Factory::build($entity->{$prop});
+                        $rel = $this->entitiesFactory->build($entity->{$prop});
 
                         if ($rel) {
                             $dirty = $this->setSpamFlag($rel, false);
 
                             if ($dirty) {
-                                $rel->save();
+                                $this->saveAction
+                                    ->setEntity($rel)
+                                    ->save();
                             }
                         }
                     }
@@ -322,7 +361,9 @@ class Actions
                 $dirty = $this->setDeletedFlag($entity, false);
 
                 if ($dirty) {
-                    $entity->save();
+                    $this->saveAction
+                        ->setEntity($entity)
+                        ->save();
                 }
 
                 // Attachment and/or embedded entity
@@ -330,13 +371,15 @@ class Actions
 
                 foreach ($props as $prop) {
                     if ($entity->{$prop}) {
-                        $rel = Entities\Factory::build($entity->{$prop});
+                        $rel = $this->entitiesFactory->build($entity->{$prop});
 
                         if ($rel) {
                             $dirty = $this->setDeletedFlag($rel, false);
 
                             if ($dirty) {
-                                $rel->save();
+                                $this->saveAction
+                                    ->setEntity($rel)
+                                    ->save();
                             }
                         }
                     }
@@ -364,7 +407,7 @@ class Actions
         $dirty = false;
 
         // Main mature flag
-        if (method_exists($entity, 'setMature')) {
+        if (method_exists($entity, '_magicAttributes') || method_exists($entity, 'setMature')) {
             $entity->setMature($value);
             $dirty = true;
         } elseif (method_exists($entity, 'setFlag')) {
@@ -409,7 +452,7 @@ class Actions
         $dirty = false;
 
         // Main mature flag
-        if (method_exists($entity, 'setSpam')) {
+        if (method_exists($entity, '_magicAttributes') || method_exists($entity, 'setSpam')) {
             $entity->setSpam($value);
             $dirty = true;
         } elseif (method_exists($entity, 'setFlag')) {
@@ -440,7 +483,7 @@ class Actions
         $dirty = false;
 
         // Main mature flag
-        if (method_exists($entity, 'setDeleted')) {
+        if (method_exists($entity, '_magicAttributes') || method_exists($entity, 'setDeleted')) {
             $entity->setDeleted($value);
             $dirty = true;
         } elseif (method_exists($entity, 'setFlag')) {

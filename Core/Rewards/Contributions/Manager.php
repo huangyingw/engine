@@ -65,7 +65,8 @@ class Manager
             ->setInterval('day');
 
         if ($this->user) { 
-            $this->analytics->setUser($this->user);
+            $this->analytics
+                ->setUser($this->user);
         }
 
         $contributions = [];
@@ -95,10 +96,24 @@ class Manager
         return $contributions; 
     }
 
+
+    public function issueCheckins($count)
+    {
+        $multiplier = ContributionValues::$multipliers['checkin'];
+        $contribution = new Contribution();
+        $contribution->setMetric('checkins')
+            ->setTimestamp($this->from)
+            ->setScore($count * $multiplier)
+            ->setAmount($count);
+
+        $contribution->setUser($this->user);
+        $this->repository->add($contribution);
+    }
+
     /**
      * Gather the entire site contribution score
      */
-    protected function getSiteContribtionScore()
+    public function getSiteContribtionScore()
     {
         if (isset($this->site_contribtion_score_cache[$this->from])) {
             return $this->site_contribtion_score_cache[$this->from];
@@ -113,7 +128,7 @@ class Manager
      * Gather the contribution score for the user
      * @return int
      */
-    protected function getUserContributionScore()
+    public function getUserContributionScore()
     {
         return $this->sums
             ->setTimestamp($this->from)
@@ -127,10 +142,16 @@ class Manager
      */
     public function getRewardsAmount()
     {
-        $share = BigNumber::_($this->getUserContributionScore(), 18)->div($this->getSiteContribtionScore());
-        $pool = BigNumber::toPlain('100000000', 18)->div(4)->div(365);
+        //$share = BigNumber::_($this->getUserContributionScore(), 18)->div($this->getSiteContribtionScore());
+        //$pool = BigNumber::toPlain('100000000', 18)->div(15)->div(365);
 
-        return (string) $pool->mul($share);
+        //$velocity = 10;
+
+        //$pool = $pool->div($velocity);
+        
+        $tokensPerScore = BigNumber::_(pi())->mul(10 ** 18)->div(200);
+        $tokens = BigNumber::_($this->getUserContributionScore())->mul($tokensPerScore);
+        return (string) $tokens;
     }
 
 }

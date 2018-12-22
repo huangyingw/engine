@@ -8,6 +8,7 @@
 
 namespace Minds\Core\Blockchain\Events;
 
+use Minds\Core\Blockchain\Transactions\Repository;
 use Minds\Core\Blockchain\Transactions\Transaction;
 use Minds\Core\Data;
 use Minds\Core\Di\Di;
@@ -24,9 +25,26 @@ class BoostEvent implements BlockchainEventInterface
 
     protected $mongo;
 
-    public function __construct($mongo = null)
+    /** @var Repository $txRepository */
+    protected $txRepository;
+
+    /** @var \Minds\Core\Boost\Repository $boostRepository */
+    protected $boostRepository;
+    
+    /** @var Config $config */
+    protected $config;
+
+    public function __construct(
+        $mongo = null,
+        $txRepository = null,
+        $boostRepository = null,
+        $config = null
+    )
     {
         $this->mongo = $mongo ?: Data\Client::build('MongoDB');
+        $this->txRepository = $txRepository ?: Di::_()->get('Blockchain\Transactions\Repository');
+        $this->boostRepository = $boostRepository ?: Di::_()->get('Boost\Repository');
+        $this->config = $config ?: Di::_()->get('Config');
     }
 
     /**
@@ -46,6 +64,10 @@ class BoostEvent implements BlockchainEventInterface
     {
         $method = static::$eventsMap[$topic];
 
+        if ($log['address'] != $this->config->get('blockchain')['contracts']['boost']['contract_address']) {
+            throw new \Exception('Event does not match address');
+        }
+
         if (method_exists($this, $method)) {
             $this->{$method}($log, $transaction);
         } else {
@@ -55,21 +77,26 @@ class BoostEvent implements BlockchainEventInterface
 
     public function boostFail($log, $transaction) {
         if ($transaction->getContract() !== 'boost') {
+            throw new \Exception("Failed but not a boost");
             return;
         }
 
-        $boost = Di::_()->get('Boost\Repository')
+        $boost = $this->boostRepository
             ->getEntity($transaction->getData()['handler'], $transaction->getData()['guid']);
 
         $tx = (string) $transaction->getTx();
 
         if (!$boost) {
-            throw new \Exception("No boost with hash ${$tx}");
+            throw new \Exception("No boost with hash {$tx}");
         }
 
         if ($boost->getState() != 'pending') {
-            throw new \Exception("Boost with hash ${$tx} already processed. State: " . $boost->getState());
+            throw new \Exception("Boost with hash {$tx} already processed. State: " . $boost->getState());
         }
+
+        $transaction->setFailed(true);
+
+        $this->txRepository->update($transaction, [ 'failed' ]);
 
         $boost->setState('failed')
             ->save();
@@ -79,41 +106,29 @@ class BoostEvent implements BlockchainEventInterface
 
     public function boostSent($log, $transaction)
     {
-        try {
-            $this->resolve($transaction);
-        } catch (\Exception $e) {
-            // Catch race condition. Mining might be faster than /v1/boost or /v1/boost/peer request.
-            sleep(2);
-
-            try {
-                $this->resolve($transaction);
-            } catch (\Exception $e) {
-                error_log($e->getMessage());
-                // Log?
-            }
-        }
+        $this->resolve($transaction);
     }
 
     /**
      * @param Transaction $transaction
      */
     private function resolve($transaction) {
-        $repo = Di::_()->get('Boost\Repository');
 
-        $boost = $repo->getEntity($transaction->getData()['handler'], $transaction->getData()['guid']);
+        $boost = $this->boostRepository->getEntity($transaction->getData()['handler'], $transaction->getData()['guid']);
 
         $tx = (string) $transaction->getTx();
 
         if(!$boost) {
-            throw new \Exception("No boost with hash ${$tx}");
+            throw new \Exception("No boost with hash {$tx}");
         }
 
         if($boost->getState() != 'pending') {
-            throw new \Exception("Boost with hash ${$tx} already processed. State: " . $boost->getState());
+            throw new \Exception("Boost with hash {$tx} already processed. State: " . $boost->getState());
         }
 
         $boost->setState('created')
             ->save();
+        echo "{$boost->getGuid()} now marked completed";
     }
 
     public function boostAccepted($log)

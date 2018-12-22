@@ -13,8 +13,6 @@ class Reminds extends Aggregate
 
     public function get()
     {
-        $field = 'entity_guid';
-
         $filter = [
             'term' => ['action' => 'remind']
         ];
@@ -30,7 +28,7 @@ class Reminds extends Aggregate
             ]
         ];
 
-        if ($this->type) {
+        if ($this->type && $this->type != 'group') {
             $must[]['match'] = [
                 'entity_type' => $this->type
             ];
@@ -39,6 +37,19 @@ class Reminds extends Aggregate
         if ($this->subtype) {
             $must[]['match'] = [
                 'entity_subtype' => $this->subtype
+            ];
+        }
+
+        $field = 'entity_guid';
+        $cardinality_field = 'user_phone_number_hash';
+
+        if ($this->type == 'group') {
+            $field = 'entity_container_guid';
+            $must[]['range'] = [
+                'entity_access_id' => [
+                  'gte' => 3, //would be group
+                  'lt' => null,
+                ]
             ];
         }
 
@@ -61,14 +72,14 @@ class Reminds extends Aggregate
                         'terms' => [ 
                             'field' => "$field.keyword",
                             'size' => $this->limit,
-                                'order' => [
+                            'order' => [
                                 'uniques' => 'desc'
                             ]
                         ],
                         'aggs' => [
                             'uniques' => [
                                 'cardinality' => [
-                                    'field' => 'user_phone_numner_hash.keyword'
+                                    'field' => "$cardinality_field.keyword"
                                 ]
                             ]
                         ]

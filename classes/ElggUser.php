@@ -120,7 +120,8 @@ class ElggUser extends ElggEntity
 			return true;
 		}
 
-		$db = new Minds\Core\Data\Call('entities');
+		/** @var \Minds\Core\Data\Call $db */
+		$db = Minds\Core\Di\Di::_()->get('Database\Cassandra\Entities');
 		$data = $db->getRow($guid, array('limit'=>500));
 		$data['guid'] = $guid;
 		if($data)
@@ -135,7 +136,8 @@ class ElggUser extends ElggEntity
         //    return $this->loadFromGUID(key($guid));
         //}
 
-        $lookup = new Minds\Core\Data\lookup();
+        /** @var \Minds\Core\Data\lookup $lookup */
+        $lookup = Minds\Core\Di\Di::_()->get('Database\Cassandra\Data\Lookup');
 		$guid = $lookup->get($string);
 		if(!$guid)
 			return false;
@@ -178,31 +180,24 @@ class ElggUser extends ElggEntity
             //error_log('allowing password save!');
         }
 
-        if(!$this->merchant || !is_array($this->merchant) || $this->merchant['service'] != 'stripe'){
+        if (!$this->merchant || !is_array($this->merchant)) {
             unset($array['merchant']); //HACK: only allow updating of merchant if it's an array
         }
 
         $result = $db->insert($this->guid, $array);
 
-				//now place email and username in index
-				$data = array($this->guid => time());
+        //now place email and username in index
+        $data = array($this->guid => time());
 
-				$db = new Minds\Core\Data\Call('user_index_to_guid');
-				if(!$db->getRow(strtolower($this->username))){
-						$db->insert(strtolower($this->username), $data);
-						$db->insert(strtolower($this->email), $data);
-                    if ($this->phone_number_hash) {
-                        $db->insert(strtolower($this->phone_number_hash), $data);
-                    }
-				}
-
-				//update our session, if it is us logged in
-				if(elgg_is_logged_in() && $this->guid == elgg_get_logged_in_user_guid()){
-            Minds\Core\Session::regenerate(false);
-						//sync our changes to other sessions
-						(new Minds\Core\Data\Sessions())->syncAll($this->guid);
+        $db = new Minds\Core\Data\Call('user_index_to_guid');
+        if(!$db->getRow(strtolower($this->username))){
+                $db->insert(strtolower($this->username), $data);
+                $db->insert(strtolower($this->email), $data);
+            if ($this->phone_number_hash) {
+                $db->insert(strtolower($this->phone_number_hash), $data);
+            }
         }
-
+			
 		return $this->guid;
 	}
 
@@ -335,15 +330,27 @@ class ElggUser extends ElggEntity
 	 *
 	 * @return bool
 	 */
-	public function isAdmin() {
+    public function isAdmin() {
 
-		// for backward compatibility we need to pull this directly
-		// from the attributes instead of using the magic methods.
-		// this can be removed in 1.9
-		//var_dump($this->admin);
-		//return $this->admin == 'yes';
-		return $this->attributes['admin'] == 'yes';
-	}
+        $ip = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null;
+
+        if (!$ip) {
+            return false;
+        }
+
+        $whitelist = Minds\Core\Di\Di::_()->get('Config')->get('admin_ip_whitelist');
+
+        if (!$whitelist || !in_array($ip, $whitelist)) {
+            return false;
+        }
+
+        // for backward compatibility we need to pull this directly
+        // from the attributes instead of using the magic methods.
+        // this can be removed in 1.9
+        //var_dump($this->admin);
+        //return $this->admin == 'yes';
+        return $this->attributes['admin'] == 'yes';
+    }
 
 	/**
 	 * Make the user an admin

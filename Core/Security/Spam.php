@@ -12,20 +12,18 @@ class Spam
 
     public function check($entity)
     {
-        $spam = false;        
-
-        $spam = $this->strposa($entity->description, $this->prohibitedDomains()) ||
-            $this->strposa($entity->briefdescription,$this->prohibitedDomains());
-
-        if ($entity->type == 'group' && $this->strposa($entity->getBriefDescription(), $this->prohibitedDomains())) {
-            $spam = true;
-        }
-
-        if ($spam) {
+        if ($this->strposa($entity->getBody(), $this->prohibitedDomains())
+            || $this->strposa($entity->getDescription(), $this->prohibitedDomains())
+            || $this->strposa($entity->getBriefDescription, $this->prohibitedDomains())
+        ) {
             throw new \Exception('Sorry, you included a reference to a domain name linked to spam. You can not use short urls (eg. bit.ly). Please remove it and try again');
         }
 
-        return $spam;
+        if ($entity->type == 'group' 
+            && $this->strposa($entity->getBriefDescription(), $this->prohibitedDomains())
+        ) {
+            new \Exception('Sorry, you included a reference to a domain name linked to spam. You can not use short urls (eg. bit.ly). Please remove it and try again');
+        }
     }
 
     protected function strposa($haystack, $needles, $offset = 0)
@@ -34,7 +32,7 @@ class Spam
             $needles = array($needles);
         }
         foreach ($needles as $query) {
-            if (strpos($haystack, $query, $offset) !== false) {
+            if (stripos($haystack, $query, $offset) !== false) {
                 return true;
             } // stop on first true result
         }
@@ -253,7 +251,147 @@ class Spam
             'goo.gl',
             'getmooovie.com',
             'marketreportscenter.com',
-            'getsooft.com'
+            'getsooft.com',
+            'myowndom.ru',
+            'print-mgn.ru',
+            'wiki-data.ru',
+            'velobog.ru',
+            'mobisony.ru',
+            'dzeroki.ru',
+            'slimkor.ru',
+            'kak-brosit-kyrit.ru',
+            'jinyurl.com',
+            'urlin.us',
+            'capillus.com',
+            'siteprofissional.com',
+            'mitersawjudge.com',
+            'mohajreen-jeeda.com',
+            'jobberies.com',
+            'bestfilms.site',
+            'baystudios.ch',
+            'elvenarhack.bid',
+            'essencephskincare.com',
+            'blog2learn.com',
+            'superrugbyonline.net',
+            'superrugby18.livejournal.com',
+            'expertairco.com',
+            'draesthetica.co.uk',
+            'sphere.social',
+            'saveabookmarks.xyz',
+            '/t.co',
+            'samuelsconstruction.build',
+            'pmwares.com',
+            'watchesofwales.co.uk',
+            //'.ru',
+            'zotero.org',
+            'speakerdeck.com',
+            'freesiteslike.com',
+            'pusha.se',
+            'vrootdownload.org',
+            'rubberwebshop.nl',
+            'restaurerlecorps.info',
+            'discretthemes.info',
+            'bride-forever.com',
+            'simplesmetamorphoses.info',
+            'mp3gain.com',
+            'mp4gain.com',
+            'ttlink.com',
+            'onepost.cf',
+            'getmefunds.com',
+            'vikinail.pl',
+            'typesofbeauty.info',
+            'joie6portia93.bloglove.cc',
+            'htgtea.com',
+            'tblogz.com',
+            'liveinternet.ru',
+            '.diowebhost.com',
+            '/yoursite.com',
+            'reworkedgames.eu',
+            'mp3gain.sourceforge.net',
+            'pages10.com',
+            '2213ys.com',
+            'goldengoosesneakershop.com',
+            'howtocrazy.com',
+            'divatsport-blog.info',
+            '1xroyal.com',
+            'yuctw.com',
+            'bangalorehotescorts.in',
+            'hx.269w.net',
+            'fr.pdffile.org',
+            'evistas.usc.edu.co',
+            'caelt3.harrisburgu.edu',
+            'seehd.pl',
+            'benonscatering.co.uk',
+            'itoolsdownload.info',
+            'knoji.com',
+            'srsintl.com',
+            'www.trauringe-efes.de',
+            'myassignmenthelp.com',
+            'sgamepro.io',
+            'brycewalkeruk.weebly.com',
+            'windscreendiscounters.co.za',
+            'bitcoinrevolutionreview.com',
+            'freebetqq.com',
+            'mpocash.com',
+            'backofficevi.com',
+            'thesingaporepropertyblog.wordpress.com',
+            'www.winni.in',
+            'www.viki.com',
+            '//is.gd',
+            '/answerfirst.com',
+            'cewnote.com',
+            'www.mastherapy.es',
+            'pcpltd.com',
+            '/nutoyshop.info',
+            '/ppcair.com',
+            'xe365.info',
+            'www.foodpoisoningnews.com',
+            '/freecracks.net',
+            'www.noosaboatique.com.au',
+            'www.bestbeds.co.nz',
+            '/taxisweybridge.com',
+            'www.speakwell.co.in',
+            'www.islamickalajadu.com',
+            'www.zxpanel.com',
+            '.shop1.cz',
+            '//Inve.one',
+            'www.rsstop10.com',
+            'www.cheapjerseys91.com',
+            '.blogcountry.net',
+            '/renewableenergyworld.com',
+            '/www.anobii.com',
+            '/atreointernational.com',
+            '/thoushallnotwhine.com',
+            '/boldwap.net',
+            '/images16.fotki.com',
+            '/www.mirrorcreator.com',
+            '/ipaymu.com',
+            '/www.deerasa.com',
+            '/lp-distributors.com',
+            '/www.radyoharunyahya.com',
+            '/dominoqiu.co/',
+            '/rejuvabrains.org/',
+            '/images108.fotki.com',
+            '/www.wizhez.com',
+            'www.iamsport.org',
+            '/justinbravo.com',
+            '/alix92irina.blog5.net',
+            '/usachinatraining.com',
+            'prodid3gizi.poltekkes-malang.ac.id',
+            '/www.getjealous.com',
+            '/www.gdaca.com',
+            '/bxxlacy864398.wordpress.com',
+            '/vip126.cafe24.com',
+            '/treltistconsi1972.wordpress.com',
+            '/dansmoke.com/',
+            '/www.boostmedia.in',
+            'www.thechubbybuddy.com',
+            '/anewwellnessspa.com',
+            '/mercer82rios.wordpress.com',
+            '/cadcamoffices.co.uk',
+            '/carpetexperts.net',
+            '/media4.picsearch.com',
+            'slotsbonus777.com'
         ];
     }
 

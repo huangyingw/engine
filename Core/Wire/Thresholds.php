@@ -5,6 +5,7 @@ use Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Core\Payments;
 use Minds\Core\Util\BigNumber;
+use Minds\Helpers\MagicAttributes;
 
 class Thresholds
 {
@@ -13,54 +14,67 @@ class Thresholds
      */
     public function isAllowed($user, $entity)
     {
-        if (!is_object($entity) || !method_exists($entity, 'getWireThreshold')) {
+        if (!is_object($entity) || !(MagicAttributes::getterExists($entity, 'getWireThreshold') || method_exists($entity, 'getWireThreshold'))) {
             throw new \Exception('Entity cannot be paywalled');
         }
 
-        if (is_object($user)) {
-            $user = $user->guid;
+	    if ($user && ($user->guid === $entity->getOwnerEntity()->guid || $user->isAdmin())) {
+            return true;
+        }
+
+        $isPaywall = false;
+        if (method_exists($entity, 'isPaywall') && $entity->isPaywall()) {
+            $isPaywall = true;
+        } elseif (method_exists($entity, 'getFlag') && $entity->getFlag('paywall')) {
+            $isPaywall = true;
         }
 
         $threshold = $entity->getWireThreshold();
 
-        //make sure legacy posts can work
-        if (!$threshold && $entity->isPaywall()) {
+        if (!$threshold && $isPaywall) {
             $threshold = [
-              'type' => 'money',
-              'min' => $entity->getOwnerEntity()->getMerchant()['exclusive']['amount']
+                'type' => 'money',
+                'min' => $entity->getOwnerEntity()->getMerchant()['exclusive']['amount']
             ];
         }
 
-        $amount = 0;
-        /** @var Sums $sums */
-        $sums = Di::_()->get('Wire\Sums');
-        $sums->setReceiver($entity->getOwnerGUID())
-            ->setSender($user)
-            ->setFrom((new \DateTime('midnight'))->modify("-30 days")->getTimestamp());
+        //make sure legacy posts can work
+        if ($isPaywall) {
 
-        $amount = $sums->getSent();
+            $amount = 0;
 
-        $minThreshold = $threshold['min'];
+            /** @var Sums $sums */
+            $sums = Di::_()->get('Wire\Sums');
+            $sums->setReceiver($entity->getOwnerGUID())
+                ->setSender($user->guid)
+                ->setFrom((new \DateTime('midnight'))->modify("-30 days")->getTimestamp());
 
-        if($threshold['type'] === 'tokens') {
-            $minThreshold = BigNumber::toPlain($threshold['min'], 18);
-        }
+            $amount = $sums->getSent();
 
-        $allowed = BigNumber::_($amount)->sub($minThreshold)->gte(0);
+            $minThreshold = $threshold['min'];
 
-        if ($allowed) {
-            return true;
-        }
-
-        //Plus hack
-        if ($entity->owner_guid == '730071191229833224') {
-            $plus = (new Core\Plus\Subscription())->setUser($user);
-
-            if ($plus->isActive()) {
-                return true; 
+            if ($threshold['type'] === 'tokens') {
+                $minThreshold = BigNumber::toPlain($threshold['min'], 18);
             }
+
+            $allowed = BigNumber::_($amount)->sub($minThreshold)->gte(0);
+
+            if ($allowed) {
+                return true;
+            }
+
+            //Plus hack
+            if ($entity->owner_guid == '730071191229833224') {
+                $plus = (new Core\Plus\Subscription())->setUser($user);
+
+                if ($plus->isActive()) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
-        return false; 
+        return true;
     }
 }

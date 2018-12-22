@@ -2,6 +2,7 @@
 namespace Minds\Core\Media;
 
 use Minds\Core;
+use Minds\Core\Di\Di;
 use Minds\Entities;
 
 class Thumbnails
@@ -17,6 +18,12 @@ class Thumbnails
     {
         $entity = Entities\Factory::build($guid);
         if (!$entity || !Core\Security\ACL::_()->read($entity)) {
+            return false;
+        }
+
+        $loggedInUser = Core\Session::getLoggedinUser();
+
+        if (!Di::_()->get('Wire\Thresholds')->isAllowed($loggedInUser, $entity)) {
             return false;
         }
 
@@ -42,7 +49,7 @@ class Thumbnails
                         $entity->batch_guid = $this->container_guid;
                     }
 
-                    $thumbnail->setFilename("/image/$entity->batch_guid/$entity->guid/$size.jpg");
+                    $thumbnail->setFilename("image/$entity->batch_guid/$entity->guid/$size.jpg");
                 } elseif ($entity->gif) {
                     $thumbnail->setFilename(str_replace('xlarge.jpg', 'master.jpg', $entity->filename));
                 }
@@ -57,7 +64,6 @@ class Thumbnails
 
             case 'video':
                 if (!$entity->thumbnail) {
-                    $cinemr = $entity->cinemr();
                     $thumbnail = $this->config->get('cinemr_url') . $entity->cinemr_guid . '/thumbnail-00001.png';
 
                     break;

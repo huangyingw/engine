@@ -210,6 +210,12 @@ class channel implements Interfaces\Api
                     }
                 }
 
+
+                if (isset($_POST['tags']) && $_POST['tags']) {
+                    $update['tags'] = json_encode($_POST['tags']);
+                    $owner->$field = $update['tags'];
+                }
+
                 /*try {
                     $spam = new Core\Security\Spam();
                     $spam->check($owner);
@@ -218,19 +224,6 @@ class channel implements Interfaces\Api
                 }*/
 
                 if (isset($_POST['social_profiles']) && is_array($_POST['social_profiles'])) {
-                    $allowedKeys = [
-                        'facebook',
-                        'github',
-                        'linkedin',
-                        'minds',
-                        'reddit',
-                        'soundcloud',
-                        'tumblr',
-                        'twitter',
-                        'youtube_channel',
-                        'youtube_user',
-                        'instagram',
-                    ];
                     $profiles = [];
 
                     foreach ($_POST['social_profiles'] as $profile) {
@@ -241,7 +234,7 @@ class channel implements Interfaces\Api
                         $key = $profile['key'];
                         $value = $profile['value'];
 
-                        if (!in_array($key, $allowedKeys) || !$value || !is_string($value)) {
+                        if (!$value || !is_string($value)) {
                             continue;
                         }
 
@@ -261,10 +254,6 @@ class channel implements Interfaces\Api
 
                 $db = new Core\Data\Call('entities');
                 $db->insert($owner->guid, $update);
-                //update session also
-                Core\Session::regenerate(false, $owner);
-                //sync our change to our other sessions
-                (new Core\Data\Sessions())->syncAll($owner->guid);
        }
 
         return Factory::response($response);
@@ -304,6 +293,7 @@ class channel implements Interfaces\Api
                 if ($customer) {
                     $stripe->deleteCustomer($customer);
                 }
+                (new Core\Data\Sessions())->destroyAll($channel->guid);
         }
 
         return Factory::response(array());

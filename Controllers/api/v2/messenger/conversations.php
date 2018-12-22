@@ -46,11 +46,18 @@ class conversations implements Interfaces\Api
     private function getConversation($pages)
     {
         $response = [];
+        $delimiter = ':';
 
         $me = Core\Session::getLoggedInUser();
 
+        if ($pages[0]) {
+            $split_guid = explode($delimiter, $pages[0]);
+            sort($split_guid);
+            $guids = join($delimiter, $split_guid);
+        }
+
         $conversation = (new Entities\Conversation())
-          ->loadFromGuid($pages[0]);
+          ->loadFromGuid($guids);
 
         if (!Security\ACL::_()->read($conversation)) {
             return Factory::response([
@@ -106,11 +113,11 @@ class conversations implements Interfaces\Api
 
         if ($messages) {
             foreach ($messages as $k => $message) {
-                if (!isset($_GET['access_token'])) {
+                if (!(isset($_SERVER['HTTP_AUTHORIZATION']) && $_SERVER['HTTP_AUTHORIZATION'])) {
                     $_GET['decrypt'] = true;
                 }
                 if (isset($_GET['decrypt']) && $_GET['decrypt']) {
-                    $messages[$k]->decrypt(Core\Session::getLoggedInUser(), urldecode($_GET['password']));
+                    $messages[$k]->decrypt(Core\Session::getLoggedInUser(), $_COOKIE['messenger-secret']);
                 } else {
                     //support legacy clients
                     $messages[$k]->message = $messages[$k]->getMessage(Core\Session::getLoggedInUserGuid());
@@ -127,7 +134,7 @@ class conversations implements Interfaces\Api
 
         $keystore = new Messenger\Keystore();
 
-        if (!$offset || isset($_GET['access_token'])) {
+        if (!$offset || isset($_SERVER['HTTP_AUTHORIZATION'])) {
             //return the public keys
             $response['publickeys'] = [];
             $response['publickeys'][Session::getLoggedInUserGuid()] = $keystore->setUser(Core\Session::getLoggedInUser())->getPublicKey();
@@ -156,7 +163,15 @@ class conversations implements Interfaces\Api
             foreach ($response['conversations'] as $k => $v) {
                 $response['conversations'][$k]['subscribed'] = true;
                 $response['conversations'][$k]['subscriber'] = true;
+
+                //if no username, user has vanished
+                if (!$response['conversations'][$k]['username']) {
+                    unset($response['conversations'][$k]);
+                }
             }
+
+            //order needs reseting due to possible deletes
+            $response['conversations'] = array_values($response['conversations']);
 
             end($conversations);
             $response['load-next'] = (int) $_GET['offset'] + count($conversations);
@@ -171,7 +186,14 @@ class conversations implements Interfaces\Api
 
         //error_log("got a message to send");
         $conversation = new Entities\Conversation();
-        $conversation->setGuid($pages[0]);
+
+        $guid = "";
+
+        $split_guid = explode(":", $pages[0]);
+        sort($split_guid);
+        $guid = join(":", $split_guid);
+
+        $conversation->setGuid($guid);
 
         if (!Security\ACL::_()->read($conversation)) {
             return Factory::response([

@@ -847,9 +847,7 @@ function generate_random_cleartext_password() {
  * @return string
  */
 function generate_user_password(ElggUser $user, $password, $algo = 'sha256') {
-	if($algo == 'md5')
-			return md5($password . $user->salt);
-	return hash('sha256', $password . $user->salt);
+	throw new \Exception('Removed function called `generate_random_cleartext_password()`');
 }
 
 /**
@@ -936,7 +934,13 @@ function validate_password($password) {
 	}
 
 	if (strlen($password) < $CONFIG->min_password_length) {
-		$msg = elgg_echo('registration:passwordtooshort', array($CONFIG->min_password_length));
+		$msg = "Passwords should be at least " . $CONFIG->min_password_length . " characters long";
+		throw new RegistrationException($msg);
+	}
+
+	//Check for a uppercase character, numeric character,special character 
+	if (!preg_match('/[A-Z]/', $password) || !preg_match('/\d/', $password) || !preg_match('/[^a-zA-Z\d]/', $password) || preg_match("/\\s/", $password)) {
+		$msg = "Password must have more than 8 characters. Including uppercase, numbers, special characters (ie. !,#,@), and cannot have spaces.";
 		throw new RegistrationException($msg);
 	}
 
@@ -1027,8 +1031,8 @@ $allow_multiple_emails = false, $friend_guid = 0, $invitecode = '') {
 	$user->setEmail($email);
 	$user->name = $name;
 	$user->access_id = ACCESS_PUBLIC;
-	$user->salt = generate_random_cleartext_password(); // Note salt generated before password!
-	$user->password = generate_user_password($user, $password);
+	//$user->salt = generate_random_cleartext_password(); // Note salt generated before password!
+	$user->password = Minds\Core\Security\Password::generate($user, $password);
 	$user->owner_guid = 0; // Users aren't owned by anyone, even if they are admin created.
 	$user->container_guid = 0; // Users aren't contained by anyone, even if they are admin created.
 	$user->language = get_current_language();

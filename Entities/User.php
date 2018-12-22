@@ -25,7 +25,9 @@ class User extends \ElggUser
         $this->attributes['programs'] = [];
         $this->attributes['monetization_settings'] = [];
         $this->attributes['group_membership'] = [];
-        $this->attributes['plus'] = 0;
+        $this->attributes['tags'] = [];
+        $this->attributes['plus'] = 0; //TODO: REMOVE
+        $this->attributes['plus_expires'] = 0;
         $this->attributes['verified'] = 0;
         $this->attributes['founder'] = 0;
         $this->attributes['disabled_boost'] = 0;
@@ -40,9 +42,35 @@ class User extends \ElggUser
         $this->attributes['icontime'] = time();
 		$this->attributes['briefdescription'] = '';
 		$this->attributes['rating'] = 1;
-		$this->attributes['mature_channel'] = 0;
+		$this->attributes['p2p_media_disabled'] = 0;
+		$this->attributes['is_mature'] = 0;
+		$this->attributes['mature_lock'] = 0;
+		$this->attributes['opted_in_hashtags'] = 0;
+		$this->attributes['last_accepted_tos'] = Core\Config::_()->get('last_tos_update');
 
         parent::initializeAttributes();
+    }
+
+    /**
+     * Gets `tags`
+     * @return mixed
+     */
+    public function getHashtags()
+    {
+        if (is_string($this->tags)) {
+            return json_decode($this->tags);
+        }
+        return $this->tags ?: [];
+    }
+
+    /**
+     * Sets `tags`
+     * @return array
+     */
+    public function setHashtags(array $tags)
+    {
+        $this->tags = $tags;
+        return $this;
     }
 
     /**
@@ -66,23 +94,23 @@ class User extends \ElggUser
     }
 
     /**
+     * Gets the `mature` flag
+     * @return bool|int
+     */
+    public function getViewMature()
+    {
+      return $this->attributes['mature'];
+    }
+
+    /**
      * Sets the `mature` flag
      * @param  bool|int $value
      * @return $this
      */
-    public function setMature($value)
+    public function setViewMature($value)
     {
         $this->mature = $value ? 1 : 0;
         return $this;
-    }
-
-    /**
-     * Gets the `mature` flag
-     * @return bool|int
-     */
-    public function getMature()
-    {
-      return $this->mature;
     }
 
     /**
@@ -587,26 +615,15 @@ class User extends \ElggUser
         return $this;
     }
 
-    /**
-     * Set the secret key for clusters to use
-     * @todo - should we use oauth2 instead. should this be stored in its own row rather than in the user object?
-     * @param string $host
-     */
-    public function setSecretKey($host)
+
+    public function isP2PMediaDisabled()
     {
-        $key = "secret:" . serialize($host);
-        $this->$key = core\clusters::generateSecret();
-        $this->save();
+        return (bool) $this->attributes['p2p_media_disabled'];
     }
 
-    public function getMatureChannel()
+    public function toggleP2PMediaDisabled($value)
     {
-        return $this->mature_channel;
-    }
-
-    public function setMatureChannel($value)
-    {
-        $this->mature_channel = $value ? 1 : 0;
+        $this->attributes['p2p_media_disabled'] = (bool) $value;
         return $this;
     }
 
@@ -640,22 +657,22 @@ class User extends \ElggUser
 
         $export['merchant'] = $this->getMerchant() ?: false;
         $export['programs'] = $this->getPrograms();
-        $export['plus'] = $this->getPlus();
+        $export['plus'] = (bool) $this->isPlus();
         $export['verified'] = (bool) $this->verified;
         $export['founder'] = (bool) $this->founder;
         $export['disabled_boost'] = (bool) $this->disabled_boost;
         $export['boost_autorotate'] = (bool) $this->getBoostAutorotate();
         $export['categories'] = $this->getCategories();
         $export['pinned_posts'] = $this->getPinnedPosts();
-        $export['rewards'] = (bool)$this->getPhoneNumberHash();
 
-        if (isset($export['mature'])) {
-            $export['mature'] = (int) $export['mature'];
-        }
-
-        if (isset($export['mature_channel'])) {
-            $export['mature_channel'] = (int) $export['mature_channel'];
-        }
+        $export['tags'] = $this->getHashtags();
+        $export['rewards'] = (bool) $this->getPhoneNumberHash();
+        $export['p2p_media_disabled'] = $this->isP2PMediaDisabled();
+        $export['is_mature'] = $this->isMature();
+        $export['mature_lock'] = $this->getMatureLock();
+        $export['mature'] = (int) $this->getViewMature();
+        $export['last_accepted_tos'] = (int) $this->getLastAcceptedTOS();
+        $export['opted_in_hashtags'] = (int) $this->getOptedInHashtags();
 
         if (is_string($export['social_profiles'])) {
             $export['social_profiles'] = json_decode($export['social_profiles']);
@@ -702,7 +719,26 @@ class User extends \ElggUser
      */
     public function getPlus()
     {
-        return (bool) $this->plus;
+        return $this->isPlus();
+    }
+
+    /**
+     * Is the user a plus user
+     * @return int
+     */
+    public function isPlus()
+    {
+        return (bool) ((int) $this->plus_expires > time());
+    }
+
+    /**
+     * Set plus expires
+     * @var int $expires
+     */
+    public function setPlusExpires($expires)
+    {
+        $this->plus_expires = $expires;
+        return $this;
     }
 
     /**
@@ -776,6 +812,78 @@ class User extends \ElggUser
     }
 
     /**
+     * @return bool
+     */
+    public function isMature()
+    {
+        return (bool) $this->is_mature;
+    }
+
+    /**
+     * @param bool $value
+     * @return $this
+     */
+    public function setMature($value)
+    {
+        $this->is_mature = (bool) $value;
+        return $this;
+    }
+
+    /**
+     * @return bool
+     */
+    public function getMatureLock()
+    {
+        return (bool) $this->mature_lock;
+    }
+
+    /**
+     * @param bool $value
+     * @return $this
+     */
+    public function setMatureLock($value)
+    {
+        $this->mature_lock = $value;
+        return $this;
+    }
+
+    /**
+     * @return int
+     */
+    public function getLastAcceptedTOS()
+    {
+        return $this->last_accepted_tos ?: 0;
+    }
+
+    /**
+     * @param int $value
+     * @return $this
+     */
+    public function setLastAcceptedTOS($value)
+    {
+        $this->last_accepted_tos = $value;
+        return $this;
+    }
+
+    /**
+     * @return int
+     */
+    public function getOptedInHashtags()
+    {
+        return $this->opted_in_hashtags ?: 0;
+    }
+
+    /**
+     * @param int $value
+     * @return $this+
+     */
+    public function setOptedInHashtags(int $value)
+    {
+        $this->opted_in_hashtags += $value;
+        return $this;
+    }
+
+    /**
      * Returns an array of which Entity attributes are exportable
      * @return array
      */
@@ -798,6 +906,7 @@ class User extends \ElggUser
             'feature_flags',
             'programs',
             'plus',
+            'hashtags',
             'verified',
             'founder',
             'disabled_boost',
@@ -805,7 +914,10 @@ class User extends \ElggUser
             'categories',
             'wire_rewards',
             'pinned_posts',
-            'mature_channel',
+            'is_mature',
+            'mature_lock',
+            'last_accepted_tos',
+            'opted_in_hashtags',
         ));
     }
 }

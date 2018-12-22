@@ -59,6 +59,12 @@ class Manager
      */
     public function check($userGuid)
     {
+
+        if (isset($this->config->get('blockchain')['contracts']['withdraw']['limit_exemptions']) 
+            && in_array($userGuid, $this->config->get('blockchain')['contracts']['withdraw']['limit_exemptions'])) {
+            return true;
+        }
+
         $previousRequests = $this->repo->getList([
             'user_guid' => $userGuid,
             'contract' => 'withdraw',
@@ -134,6 +140,10 @@ class Manager
             throw new \Exception('The gas requested does not match the transaction');
         }
 
+        if (BigNumber::_($request->getAmount())->lt(0)) {
+            throw new \Exception('The withdraw amount must be positive');
+        }
+
         //debit the users balance
         $user = new User;
         $user->guid = (string) $request->getUserGuid();
@@ -141,7 +151,7 @@ class Manager
         try {
             $this->offChainTransactions
                 ->setUser($user)
-                ->setType('withdrawal')
+                ->setType('withdraw')
                 //->setTx($request->getTx())
                 ->setAmount((string) BigNumber::_($request->getAmount())->neg())
                 ->create();
@@ -150,13 +160,10 @@ class Manager
             return;
         }
 
-        $request->setCompleted(true);
-        $this->repo->add($request);
-
         //now issue the transaction
-        $res = $this->eth->sendRawTransaction($this->config->get('blockchain')['rewards_wallet_pkey'], [
-            'from' => $this->config->get('blockchain')['rewards_wallet_address'],
-            'to' => $this->config->get('blockchain')['withdraw_address'],
+        $txHash = $this->eth->sendRawTransaction($this->config->get('blockchain')['contracts']['withdraw']['wallet_pkey'], [
+            'from' => $this->config->get('blockchain')['contracts']['withdraw']['wallet_address'],
+            'to' => $this->config->get('blockchain')['contracts']['withdraw']['contract_address'],
             'gasLimit' => BigNumber::_(4612388)->toHex(true),
             'gasPrice' => BigNumber::_(10000000000)->toHex(true),
             'data' => $this->eth->encodeContractMethod('complete(address,uint256,uint256,uint256)', [
@@ -165,7 +172,13 @@ class Manager
                 BigNumber::_($request->getGas())->toHex(true),
                 BigNumber::_($request->getAmount())->toHex(true),
             ])
-         ]);
+        ]);
+
+        $request
+            ->setCompletedTx($txHash)
+            ->setCompleted(true);
+            
+        $this->repo->add($request);
     }
 
 }

@@ -20,9 +20,13 @@ class Client implements Interfaces\ClientInterface
     public function __construct(array $options = array())
     {
         $options = array_merge((array) Config::_()->cassandra, $options);
+        $retry_policy = new Driver\RetryPolicy\DowngradingConsistency();
 
         $this->cluster = Driver::cluster()
            ->withContactPoints(... $options['cql_servers'])
+           ->withLatencyAwareRouting(true)
+           ->withDefaultConsistency(Driver::CONSISTENCY_QUORUM)
+           ->withRetryPolicy(new Driver\RetryPolicy\Logging($retry_policy))
            ->withPort(9042)
            ->build();
         $this->session = $this->cluster->connect($options['keyspace']);
@@ -37,15 +41,17 @@ class Client implements Interfaces\ClientInterface
             $statement = $this->session->prepare($cql['string']);
             $future = $this->session->executeAsync(
               $statement,
-              new Driver\ExecutionOptions(array_merge(
+              @new Driver\ExecutionOptions(array_merge(
                   [
                     'arguments' => $cql['values']
                   ],
                   $request->getOpts()
                   ))
             );
-            if (!$silent) {
-              return $response = $future->get();
+            if ($silent) {
+                return $future;
+            } else {
+                return $response = $future->get();
             }
         }catch(\Exception $e){
             if ($this->debug) {
@@ -58,7 +64,17 @@ class Client implements Interfaces\ClientInterface
         return true;
     }
 
-    public function batchRequest($requests = array(), $batchType = Driver::BATCH_COUNTER)
+    /**
+     * Run a synchronous query
+     * @param string $statement
+     * @return mixed
+     */
+    public function execute($statement)
+    {
+        return $this->session->execute($statement);
+    }
+
+    public function batchRequest($requests = array(), $batchType = Driver::BATCH_COUNTER, $silent = false)
     {
         $batch = new Driver\BatchStatement($batchType);
 
@@ -66,6 +82,10 @@ class Client implements Interfaces\ClientInterface
             $cql = $request;
             $statement = $this->session->prepare($cql['string']);
             $batch->add($statement, $cql['values']);
+        }
+
+        if ($silent) {
+            return $this->session->executeAsync($batch);
         }
 
         return $this->session->execute($batch);

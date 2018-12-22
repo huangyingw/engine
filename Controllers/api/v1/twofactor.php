@@ -10,6 +10,7 @@ namespace Minds\Controllers\api\v1;
 
 use Minds\Api\Factory;
 use Minds\Core;
+use Minds\Core\Di\Di;
 use Minds\Core\Security;
 use Minds\Entities;
 use Minds\Interfaces;
@@ -102,7 +103,13 @@ class twofactor implements Interfaces\Api
                 if ($twofactor->verifyCode($secret, $_POST['code'], 1)) {
                     global $TWOFACTOR_SUCCESS;
                     $TWOFACTOR_SUCCESS = true;
-                    \login($user, true);
+                    
+                    $sessions = Core\Di\Di::_()->get('Sessions\Manager');
+                    $sessions->setUser($user);
+                    $sessions->createSession();
+                    $sessions->save(); // save to db and cookie
+                    
+                    //\login($user, true);
 
                     $response['status'] = 'success';
                     $response['user'] = $user->export();
@@ -111,6 +118,21 @@ class twofactor implements Interfaces\Api
                     $response['status'] = 'error';
                     $response['message'] = 'LoginException::CodeVerificationFailed';
                 }
+                break;
+            case "remove":
+                $validator = Di::_()->get('Security\Password');
+            
+                if (!$validator->check(Core\Session::getLoggedinUser(), $_POST['password'])) {
+                    return Factory::response([
+                        'status' => 'error',
+                        'message' => 'Password incorrect'
+                    ]);
+                }
+        
+                $user = Core\Session::getLoggedInUser();
+                $user->twofactor = false;
+                $user->telno = false;
+                $user->save();
                 break;
         }
 
@@ -123,10 +145,5 @@ class twofactor implements Interfaces\Api
 
     public function delete($pages)
     {
-        $user = Core\Session::getLoggedInUser();
-        $user->twofactor = false;
-        $user->telno = false;
-        $user->save();
-        return Factory::response([]);
     }
 }

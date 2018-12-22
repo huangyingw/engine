@@ -23,7 +23,7 @@ class GroupMapping extends EntityMapping implements MappingInterface
 
     public function map(array $defaultValues = [])
     {
-        $map = $defaultValues;
+        $map = parent::map($defaultValues);
 
         $map['name'] = (string) $this->entity->getName();
         $map['brief_description'] = (string) $this->entity->getBriefDescription();
@@ -33,9 +33,9 @@ class GroupMapping extends EntityMapping implements MappingInterface
         $map['membership'] = (int) $this->entity->getMembership();
         $map['public'] = $map['membership'] == ACCESS_PUBLIC;
 
-        //$map['tags'] = array_unique(array_merge($map['tags'], $this->entity->getTags()));
-        $map['tags'] = [];
-
+        $map['tags'] = array_unique(array_merge($map['tags'], $this->entity->getTags()));
+        $map['rating'] = $this->entity->getRating();
+        
         return $map;
     }
 }

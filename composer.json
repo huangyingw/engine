@@ -4,7 +4,6 @@
     "require": {
         "aws/aws-sdk-php": "^3.38",
         "braintree/braintree_php": "3.5.0",
-        "bshaffer/oauth2-server-php": "1.7",
         "datastax/php-driver": "1.2.2",
 	      "elasticsearch/elasticsearch": "~5.0.0",
         "facebook/php-sdk-v4": "~5.0",
@@ -22,12 +21,16 @@
         "videlalvaro/php-amqplib": "dev-master@dev",
         "vscn/cruftflake": "dev-master#cab1b9ee9869072e7a58a1eb593b602ec5bedcd3",
         "zircote/swagger-php": "2.*@dev",
-        "mongodb/mongodb": "^1.0.0",
+        "mongodb/mongodb": "1.0.5",
         "abraham/twitteroauth": "^0.6.4",
         "google/apiclient": "^2.0",
         "aws/aws-php-sns-message-validator": "^1.4",
         "giggsey/libphonenumber-for-php": "^8.8",
-        "php-ffmpeg/php-ffmpeg": "^0.11.1"
+        "php-ffmpeg/php-ffmpeg": "^0.11.1",
+        "erusev/parsedown": "^1.7",
+        "zendframework/zend-diactoros": "1.8.6",
+        "league/oauth2-server": "7.2.0",
+        "lcobucci/jwt": "3.2.4"
     },
     "repositories": [
         {
@@ -56,7 +59,8 @@
         "bin-dir": "bin"
     },
     "require-dev": {
-        "phpspec/phpspec": "~2.0",
+        "phpspec/phpspec": "~3.4",
+        "leanphp/phpspec-code-coverage": "~3.1",
         "friendsofphp/php-cs-fixer": "*",
         "bossa/phpspec2-expect": "*",
         "apigen/apigen": "*"

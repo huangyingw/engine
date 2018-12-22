@@ -82,7 +82,7 @@ class forgotpassword implements Interfaces\Api, Interfaces\ApiIgnorePam
               break;
           }
 
-          if ($user->password_reset_code && $user->password_reset_code != $_POST['code']) {
+          if ($user->password_reset_code && $user->password_reset_code !== $_POST['code']) {
               $response['status'] = "error";
               $response['message'] = "The reset code is invalid";
               break;
@@ -102,7 +102,10 @@ class forgotpassword implements Interfaces\Api, Interfaces\ApiIgnorePam
 
           (new \Minds\Core\Data\Sessions())->destroyAll($user->guid);
 
-          login($user);
+          $sessions = Core\Di\Di::_()->get('Sessions\Manager');
+          $sessions->setUser($user);
+          $sessions->createSession();
+          $sessions->save(); // save to db and cookie
 
           $response['user'] = $user->export();
 

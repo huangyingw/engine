@@ -7,6 +7,7 @@ namespace Minds\Core\Data;
 
 use Minds\Core\Data\Locks;
 use Minds\Core\Di\Provider;
+use PDO;
 
 class DataProvider extends Provider
 {
@@ -39,11 +40,17 @@ class DataProvider extends Provider
         $this->di->bind('Database\Cassandra\Entities', function ($di) {
             return new Call('entities');
         }, ['useFactory'=>false]);
+        $this->di->bind('Database\Cassandra\UserIndexes', function ($di) {
+            return new Call('user_index_to_guid');
+        }, ['useFactory'=>false]);
         $this->di->bind('Database\Cassandra\Indexes', function ($di) {
             return new Cassandra\Thrift\Indexes(new Call('entities_by_time'));
         }, ['useFactory'=>false]);
         $this->di->bind('Database\Cassandra\Lookup', function ($di) {
             return new Cassandra\Thrift\Lookup(new Call('user_index_to_guid'));
+        }, ['useFactory'=>false]);
+        $this->di->bind('Database\Cassandra\Data\Lookup', function ($di) {
+            return new lookup();
         }, ['useFactory'=>false]);
         $this->di->bind('Database\Cassandra\Relationships', function ($di) {
             return new Cassandra\Thrift\Relationships(new Call('relationships'));
@@ -56,6 +63,22 @@ class DataProvider extends Provider
         }, ['useFactory'=>true]);
         $this->di->bind('Database\ElasticSearch', function ($di) {
             return new ElasticSearch\Client();
+        }, ['useFactory'=>true]);
+        $this->di->bind('Database\PDO', function ($di) {
+            $config = $di->get('Config')->get('database');
+            $host = isset($config['host']) ? $config['host'] : 'cockroachdb';
+            $port = isset($config['port']) ? $config['port'] : 26257;
+            $name = isset($config['name']) ? $config['name'] : 'minds';
+            $sslmode = isset($config['sslmode']) ? $config['sslmode'] : 'disable';
+            $username = isset($config['username']) ? $config['username'] : 'php';
+            return new PDO("pgsql:host=$host;port=$port;dbname=$name;sslmode=$sslmode",
+                $username,
+                null, 
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_EMULATE_PREPARES => true,
+                    PDO::ATTR_PERSISTENT => true,
+                ]);
         }, ['useFactory'=>true]);
         /**
          * Locks

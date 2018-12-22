@@ -8,6 +8,8 @@
 
 namespace Minds\Core\Blockchain\Services;
 
+use Minds\Core\Blockchain\Config;
+use Minds\Core\Blockchain\GasPrice;
 use Minds\Core\Di\Di;
 use Minds\Core\Http\Curl\JsonRpc;
 use Minds\Core\Util\BigNumber;
@@ -15,6 +17,7 @@ use MW3;
 
 class Ethereum
 {
+    /** @var Config */
     protected $config;
 
     /** @var JsonRpc\Client $jsonRpc */
@@ -29,26 +32,37 @@ class Ethereum
     /** @var MW3\Sha3 $sha3 */
     protected $sha3;
 
+    /** @var GasPrice */
+    protected $gasPrice;
+
+    /** @var array $nonces */
+    private $nonces = [];
+
     /**
      * Ethereum constructor.
      * @param null|mixed $config
      * @param null|mixed $jsonRpc
      * @throws \Exception
      */
-    public function __construct($config = null, $jsonRpc = null, $sign = null, $sha3 = null)
+    public function __construct($config = null, $jsonRpc = null, $sign = null, $sha3 = null, $gasPrice = null)
     {
-        $this->config = $config ?: Di::_()->get('Config');
+        $this->config = $config ?: new Config();
         $this->jsonRpc = $jsonRpc ?: Di::_()->get('Http\JsonRpc');
 
-        $blockchainConfig = $this->config->get('blockchain');
-
-        //if (!$blockchainConfig || !isset($blockchainConfig['rpc_endpoints'])) {
-        //    throw new \Exception('No RPC endpoints set');
-        //}
-
-        $this->endpoints = $blockchainConfig['rpc_endpoints'];
         $this->sign = $sign ?: new MW3\Sign;
         $this->sha3 = $sha3 ?: new MW3\Sha3;
+        $this->gasPrice = $gasPrice ?: Di::_()->get('Blockchain\GasPrice');
+    }
+
+    /**
+     * Sets the config key to be used
+     * @param $configKey
+     * @return $this
+     */
+    public function useConfig($configKey)
+    {
+        $this->config->setKey($configKey);
+        return $this;
     }
 
     /**
@@ -64,7 +78,7 @@ class Ethereum
             'method' => $method,
             'params' => $params
         ]);
-error_log(print_r($params, true));
+
         if (!$response) {
             throw new \Exception('Server did not respond');
         }
@@ -104,7 +118,7 @@ error_log(print_r($params, true));
         foreach ($params as $param) {
             if (strpos($param, '0x') !== 0) {
                 // TODO: Implement parameter types, etc
-                throw new \Exception('Ethereum::call only support raw hex parameters');
+                throw new \Exception('Ethereum::call only supports raw hex parameters');
             }
 
             $hex = substr($param, 2);
@@ -150,20 +164,29 @@ error_log(print_r($params, true));
      * Sends a raw transaction
      * @param string $privateKey
      * @param array $transaction
+     * @return mixed
      * @throws \Exception
      */
     public function sendRawTransaction($privateKey, array $transaction)
     {
+        $config = $this->config->get();
+
         if (!isset($transaction['from']) || !isset($transaction['gasLimit'])) {
             throw new \Exception('Transaction must have `from` and `gasLimit`');
         }
 
         if (!isset($transaction['gasPrice'])) {
-            $transaction['gasPrice'] = BigNumber::_(($this->config->get('blockchain')['server_gas_price'] ?: 1) * 1000000000)->toHex(true);
+            $transaction['gasPrice'] = $this->gasPrice->getLatestGasPrice($config['server_gas_price'] ?: 1);
         }
 
         if (!isset($transaction['nonce'])) {
-            $transaction['nonce'] = $this->request('eth_getTransactionCount', [ $transaction['from'], 'pending' ]);
+            if (isset($this->nonces[$transaction['from']])) {
+                $this->nonces[$transaction['from']] = $transaction['nonce'] = $this->nonces[$transaction['from']];
+            } else {
+                $nonce = $this->request('eth_getTransactionCount', [ $transaction['from'], 'pending' ]);
+                $this->nonces[$transaction['from']] = $transaction['nonce'] = (int) BigNumber::fromHex($nonce)->toString();
+            }
+            $this->nonces[$transaction['from']]++; //increase future nonces
         }
 
         $signedTx = $this->sign($privateKey, $transaction);
@@ -171,6 +194,7 @@ error_log(print_r($params, true));
         if (!$signedTx) {
             throw new \Exception('Error signing transaction');
         }
+
 
         return $this->request('eth_sendRawTransaction', [ $signedTx ]);
     }
@@ -182,10 +206,11 @@ error_log(print_r($params, true));
      */
     protected function getBestEndpoint()
     {
-        if (!$this->endpoints) {
+        $config = $this->config->get();
+
+        if (!$config['rpc_endpoints']) {
             throw new \Exception('No RPC endpoints available');
         }
-
-        return $this->endpoints[0];
+        return $config['rpc_endpoints'][0];
     }
 }

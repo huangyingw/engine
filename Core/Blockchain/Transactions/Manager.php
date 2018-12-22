@@ -4,8 +4,10 @@
  */
 namespace Minds\Core\Blockchain\Transactions;
 
+use Minds\Core\Blockchain\Services\Ethereum;
+use Minds\Core\Events\EventsDispatcher;
+use Minds\Core\Data\cache\abstractCacher;
 use Minds\Core\Queue;
-use Minds\Core\Events\Dispatcher;
 use Minds\Core\Di\Di;
 
 class Manager
@@ -32,10 +34,22 @@ class Manager
     /** @var Repository $repo */
     private $repo;
 
-    public function __construct($repo = null, $eth = null)
+    /** @var Queue\RabbitMQ\Client */
+    private $queue;
+
+    /** @var abstractCacher */
+    private $cacher;
+
+    /** @var EventsDispatcher */
+    private $dispatcher;
+
+    public function __construct($repo = null, $eth = null, $queue = null, $cacher = null, $dispatcher = null)
     {
         $this->repo = $repo ?: Di::_()->get('Blockchain\Transactions\Repository');
         $this->eth = $eth ?: Di::_()->get('Blockchain\Services\Ethereum');
+        $this->queue = $queue ?: Queue\Client::build();
+        $this->cacher = $cacher ?: Di::_()->get('Cache');
+        $this->dispatcher = $dispatcher ?: Di::_()->get('EventsDispatcher');
     }
 
     /**
@@ -115,12 +129,14 @@ class Manager
             return;
         }
 
-        $topics = Dispatcher::trigger('blockchain:listen', 'all', [], []);
+        $topics = $this->dispatcher->trigger('blockchain:listen', 'all', [], []);
+
 
         if ($receipt['status'] === '0x1') {
             $logs = $receipt['logs'];
         } else {
             $logs = [[ 'topics' => [ 'blockchain:fail' ] ]];
+            $transaction->setFailed(true);
         }
 
         foreach ($logs as $log) {
@@ -144,18 +160,20 @@ class Manager
             }
         }
 
+        // destroy onchain balance cache
+        $this->cacher->destroy("blockchain:balance:{$transaction->getWalletAddress()}");
         $transaction->setCompleted(true);
         $this->repo->add($transaction);
     }
 
     /**
-     * 
+     * Adds a transaction to the queue
+     * @param $transaction
      */
     public function add($transaction)
     {
         $this->repo->add($transaction);
-        Queue\Client::build()
-            ->setQueue("BlockchainTransactions")
+        $this->queue->setQueue("BlockchainTransactions")
             ->send([
                 'user_guid' => $transaction->getUserGuid(),
                 'timestamp' => $transaction->getTimestamp(),

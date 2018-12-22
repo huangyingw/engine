@@ -11,7 +11,7 @@ class Iterator implements \Iterator
 {
     protected $mongo;
 
-    protected $rating = 2;
+    protected $rating = 1;
     protected $quality = 0;
     protected $offset = null;
     protected $limit = 1;
@@ -270,7 +270,10 @@ class Iterator implements \Iterator
             $keys[] = "thumbs:up:entity:$boost->guid";
         }
         $db = new Data\Call('entities_by_time');
-        $thumbs = $db->getRows($keys, ['offset' => Core\Session::getLoggedInUserGuid()]);
+        $thumbs = $db->getRows($keys, [
+            'offset' => Core\Session::getLoggedInUserGuid(),
+            'limit' => 1,
+        ]);
         foreach ($boosts as $k => $boost) {
             $key = "thumbs:up:entity:$boost->guid";
             if (isset($thumbs[$key])) {
@@ -316,6 +319,9 @@ class Iterator implements \Iterator
 
     public function valid()
     {
+        if (!$this->list) {
+            return false;
+        }
         return key($this->list) !== null;
     }
 

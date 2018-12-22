@@ -17,8 +17,7 @@ class ManagerSpec extends ObjectBehavior
 
     function it_should_return_a_batch_of_analytics(
         Client $es
-    )
-    {
+    ) {
         $this->beConstructedWith($es);
 
         $es->request(Argument::any())
@@ -57,14 +56,62 @@ class ManagerSpec extends ObjectBehavior
                 'subscribers' => 62,
                 'comments' => 62,
                 'reminds' => 62,
-                'votes' => 62                
+                'votes' => 62,
+                'referrals' => 62,
             ],
             1511654400000 => [
                 'subscribers' => 102,
                 'comments' => 102,
-                'reminds' => 102,                
+                'reminds' => 102,
                 'votes' => 102,
+                'referrals' => 102,
             ]
+        ]);
+    }
+
+    function it_should_return_a_batch_of_top_analytics(
+        Client $es
+    ) {
+        $this->beConstructedWith($es);
+
+        $es->request(Argument::any())
+            ->shouldBeCalled()
+            ->willReturn([
+                'aggregations' => [
+                    'counts' => [
+                        'buckets' => [
+                            [
+                                "key" => 1234,
+                                "doc_count" => 71,
+                                "uniques" => [
+                                    "value" => 71
+                                ]
+                            ],
+                            [
+                                "key" => 5678,
+                                "doc_count" => 87,
+                                "uniques" => [
+                                    "value" => 87
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]);
+
+        $this->setFrom(strtotime('1 week ago') * 1000);
+        $this->setTo(time() * 1000);
+        $this->setMetric('vote:up');
+
+        $this->getTopCounts()->shouldReturn([
+            [
+                'user_guid' => 1234,
+                'value' => 71
+            ],
+            [
+                'user_guid' => 5678,
+                'value' => 87
+            ],
         ]);
     }
 

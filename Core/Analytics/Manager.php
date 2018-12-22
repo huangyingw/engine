@@ -1,8 +1,10 @@
 <?php
+
 namespace Minds\Core\Analytics;
 
-use Minds\Core\Di\Di;
 use Minds\Core\Analytics\Aggregates\ActionsHistogram;
+use Minds\Core\Analytics\Aggregates\TopActions;
+use Minds\Core\Di\Di;
 
 class Manager
 {
@@ -12,12 +14,17 @@ class Manager
     private $from;
     private $to;
     private $interval = 'day';
+    private $term = 'user_guid';
+    private $uniques = true;
+    private $metric;
+
 
     private $actions = [
         'subscribers' => 'subscribe',
         'comments' => 'comment',
         'reminds' => 'remind',
-        'votes' => 'vote:up'
+        'votes' => 'vote:up',
+        'referrals' => 'referral',
     ];
 
     public function __construct($client = null)
@@ -49,6 +56,24 @@ class Manager
         return $this;
     }
 
+    public function setTerm($term)
+    {
+        $this->term = $term;
+        return $this;
+    }
+
+    public function useUniques($bool)
+    {
+        $this->uniques = $bool;
+        return $this;
+    }
+
+    public function setMetric($metric)
+    {
+        $this->metric = $metric;
+        return $this;
+    }
+
     /**
      * Return a batch result of a series of analytic metrics
      * @return array
@@ -56,7 +81,7 @@ class Manager
     public function getCounts()
     {
         $metrics = [];
-        foreach($this->actions as $id => $action) {
+        foreach ($this->actions as $id => $action) {
             $aggregate = new ActionsHistogram($this->es);
             $aggregate
                 ->setAction($action)
@@ -65,7 +90,7 @@ class Manager
                 ->setInterval($this->interval);
 
             if ($this->user) {
-                $aggregate->setUser($this->user);           
+                $aggregate->setUser($this->user);
             }
 
             $result = $aggregate->get();
@@ -75,6 +100,25 @@ class Manager
         }
 
         return $metrics;
+    }
+
+    /**
+     * Return a batch result of a series of analytic metrics
+     * @return array
+     */
+    public function getTopCounts()
+    {
+        $aggregate = new TopActions($this->es);
+        $aggregate
+            ->setAction($this->metric)
+            ->setTo($this->to)
+            ->setFrom($this->from);
+
+        $aggregate->setTerm($this->term);
+        $aggregate->useUniques($this->uniques);
+        $result = $aggregate->get();
+
+        return $result;
     }
 
 }

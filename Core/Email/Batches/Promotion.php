@@ -8,9 +8,17 @@ use Minds\Core\Email\EmailSubscribersIterator;
 
 class Promotion implements EmailBatchInterface
 {
+    /** @var string $offset */
     protected $offset;
+
+    /** @var string $templateKey */
     protected $templateKey;
+
+    /** @var string $subject */
     protected $subject;
+
+    /** @var bool $dryRun */
+    protected $dryRun = false;
 
     /**
      * @param string $offset
@@ -19,6 +27,16 @@ class Promotion implements EmailBatchInterface
     public function setOffset($offset)
     {
         $this->offset = $offset;
+        return $this;
+    }
+
+    /**
+     * @param bool $dryRun
+     * @return Promotion
+     */
+    public function setDryRun($dryRun)
+    {
+        $this->dryRun = $dryRun;
         return $this;
     }
 
@@ -56,12 +74,18 @@ class Promotion implements EmailBatchInterface
         }
 
         $iterator = new EmailSubscribersIterator();
-        $iterator->setCampaign('global')
+        $iterator
+            ->setDryRun($this->dryRun)
+            ->setCampaign('global')
             ->setTopic('exclusive_promotions')
             ->setValue(true)
             ->setOffset($this->offset);
 
+        $i = 0;
         foreach ($iterator as $user) {
+            $i++;
+            echo "\n[$i]:$user->guid ";
+
             $campaign = new Campaigns\Promotion();
 
             $campaign
@@ -69,6 +93,8 @@ class Promotion implements EmailBatchInterface
                 ->setTemplateKey($this->templateKey)
                 ->setSubject($this->subject)
                 ->send();
+            
+            echo " (queued)";
         }
     }
 }

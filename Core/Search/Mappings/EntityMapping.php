@@ -31,6 +31,7 @@ class EntityMapping implements MappingInterface
         'description' => [ 'type' => 'text', '$exportField' => 'description' ],
         'tags' => [ 'type' => 'text' ],
         'paywall' => [ 'type' => 'boolean', '$exportField' => 'paywall' ],
+        'rating' => [ 'type' => 'integer', '$exportField' => 'rating' ],
     ];
 
     /** @var mixed $entity */
@@ -141,8 +142,8 @@ class EntityMapping implements MappingInterface
 
         $paywall = isset($map['paywall']) && $map['paywall'];
 
-        if (method_exists($this->entity, 'getPaywall')) {
-            $paywall = !!$this->entity->getPaywall();
+        if (method_exists($this->entity, 'isPaywall')) {
+            $paywall = !!$this->entity->isPaywall();
         } elseif (method_exists($this->entity, 'getFlag')) {
             $paywall = !!$this->entity->getFlag('paywall');
         }
@@ -178,7 +179,11 @@ class EntityMapping implements MappingInterface
             $tags = array_values(array_unique($matches[2]));
         }
 
-        $map['tags'] = array_map('strtolower', $tags);
+        if (!isset($map['tags'])) {
+            $map['tags'] = [];
+        }
+
+        $map['tags'] = array_unique(array_merge($map['tags'], array_map('strtolower', $tags)));
 
         //
 

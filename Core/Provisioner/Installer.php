@@ -45,10 +45,10 @@ class Installer
         ];
 
         usleep(mt_rand(1, 9999));
-        $this->defaults['site-secret'] = md5(microtime() . mt_rand());
+        $this->defaults['site-secret'] = hash('sha512', openssl_random_pseudo_bytes(128));
 
         usleep(mt_rand(1, 9999));
-        $this->defaults['jwt-secret'] = md5(microtime() . mt_rand());
+        $this->defaults['jwt-secret'] = hash('sha512', openssl_random_pseudo_bytes(128));
     }
 
     public function setApp($app)
@@ -202,10 +202,13 @@ class Installer
         }
     }
 
-    public function setupStorage(Provisioners\ProvisionerInterface $storage = null)
+    public function setupStorage(Provisioners\ProvisionerInterface $cassandraStorage = null, Provisioners\ProvisionerInterface $cockroachProvisioner = null)
     {
-        $storage = $storage ?: new Provisioners\CassandraProvisioner();
-        $storage->provision();
+        $cassandraStorage = $cassandraStorage ?: new Provisioners\CassandraProvisioner();
+        $cassandraStorage->provision();
+
+        //$cockroachProvisioner = $cockroachProvisioner ?: new Provisioners\CockroachProvisioner();
+        //$cockroachProvisioner->provision();
     }
 
     public function reloadStorage()
@@ -228,18 +231,17 @@ class Installer
 
     public function setupFirstAdmin()
     {
-        $guid = register_user(
+        $user = register_user(
             $this->options['username'],
             $this->options['password'],
             $this->options['username'],
             $this->options['email']
         );
 
-        if (!$guid) {
+        if (!$user) {
             throw new ProvisionException('Cannot create new User entity');
         }
 
-        $user = new User($guid);
         $user->admin = 'yes';
         $user->validated = true;
         $user->validated_method = 'admin_user';
@@ -252,7 +254,7 @@ class Installer
         Helpers\Wallet::createTransaction($user->guid, 750000000, $user->guid, 'Installed Minds');
 
         $activity = new Activity();
-        $activity->owner_guid = $guid;
+        $activity->owner_guid = $user->guid;
         $activity->setMessage('Hello Minds!');
         $activitySaved = $activity->save();
 

@@ -88,7 +88,10 @@ class subscriptions implements Interfaces\Api
 
         if ($subscription->getPaymentMethod() == "money") {
             if (strpos($subscription->getId(), 'sub_', 0) >= -1) {
-                if (Core\Session::getLoggedInUser()->referrer){
+                if ($subscription->getEntity()->guid) { //if a wire
+                    $user = new Entities\User($subscription->getEntity()->guid);
+                    $subscription->setMerchant($user->getMerchant());
+                } elseif (Core\Session::getLoggedInUser()->referrer){
                     $referrer = new Entities\User(Core\Session::getLoggedInUser()->referrer);
                     $subscription->setMerchant($referrer->getMerchant());
                 }
@@ -99,7 +102,7 @@ class subscriptions implements Interfaces\Api
                 $braintree->cancelSubscription($subscription);
             }
         }
-
+        
         $success = $manager
             ->setSubscription($subscription)
             ->cancel();

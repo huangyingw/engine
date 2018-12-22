@@ -30,7 +30,7 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
         $response = [];
 
         if (isset($pages[0]) && is_numeric($pages[0])) {
-            Security\ACL::$ignore = true;
+
             $entity = Di::_()->get('Media\Repository')->getEntity($pages[0]);
 
             if (!$entity || Helpers\Flags::shouldFail($entity)) {
@@ -272,6 +272,13 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
         if (!$success) {
             throw new \Exception('Error saving media entity');
         }
+
+        // Follow activity
+        (new Core\Notification\PostSubscriptions\Manager())
+            ->setEntityGuid($entity->guid)
+            ->setUserGuid(Core\Session::getLoggedInUserGuid())
+            ->follow();
+
 
         // Mark user as mature, if needed
         if (!$user->getMatureContent() && $entity->getFlag('mature')) {

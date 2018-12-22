@@ -11,6 +11,7 @@ use Minds\Api\Factory;
 use Minds\Core;
 use Minds\Core\Config;
 use Minds\Core\Di\Di;
+use Minds\Core\Queue\Client as Queue;
 use Minds\Entities;
 use Minds\Interfaces;
 
@@ -41,8 +42,11 @@ class settings implements Interfaces\Api
         $response['channel'] = $user->export();
         $response['channel']['email'] = $user->getEmail();
         $response['channel']['boost_rating'] = $user->getBoostRating();
-        $response['channel']['categories'] = $user->getCategories();
         $response['channel']['disabled_emails'] = $user->disabled_emails;
+
+        $sessionsManager = Di::_()->get('Sessions\Manager');
+        $sessionsManager->setUser($user);
+        $response['channel']['open_sessions'] = $sessionsManager->getActiveCount();
 
         $response['thirdpartynetworks'] = Core\Di\Di::_()->get('ThirdPartyNetworks\Manager')->status();
 
@@ -74,7 +78,7 @@ class settings implements Interfaces\Api
         }
 
         if (isset($_POST['name']) && $_POST['name']) {
-            $user->name = $_POST['name'];
+            $user->name = trim($_POST['name']);
         }
 
         if (isset($_POST['email']) && $_POST['email']) {
@@ -90,11 +94,7 @@ class settings implements Interfaces\Api
         }
 
         if (isset($_POST['mature'])) {
-            $user->setMature(isset($_POST['mature']) && (int) $_POST['mature']);
-        }
-
-        if (isset($_POST['mature_channel'])) {
-            $user->setMatureChannel(isset($_POST['mature_channel']) && (int) $_POST['mature_channel']);
+            $user->setViewMature(isset($_POST['mature']) && (int) $_POST['mature']);
         }
 
         if (isset($_POST['monetized']) && $_POST['monetized']) {
@@ -116,6 +116,15 @@ class settings implements Interfaces\Api
             } catch (Core\Security\Exceptions\PasswordRequiresHashUpgradeException $e) {
 
             }
+
+            try {
+                validate_password($_POST['new_password']);
+            } catch (\Exception $e) {
+                $response = array('status'=>'error', 'message'=>$e->getMessage());
+
+                return Factory::response($response);
+            }
+
             //need to create a new salt and hash...
             //$user->salt = Core\Security\Password::salt();
             $user->password = Core\Security\Password::generate($user, $_POST['new_password']);
@@ -125,48 +134,15 @@ class settings implements Interfaces\Api
             \Minds\Core\Session::regenerate(true, $user);
         }
 
-        $allowedLanguages = ['en', 'es', 'fr'];
+        $allowedLanguages = ['en', 'es', 'fr', 'vi'];
 
         if (isset($_POST['language']) && in_array($_POST['language'], $allowedLanguages)) {
             $user->setLanguage($_POST['language']);
         }
 
-        $allowedCategories = array_keys(Config::_()->get('categories'));
-        $repository = Di::_()->get('Categories\Repository');
-        $removedCategories = [];
-        $newCategories = [];
-
-        if (isset($_POST['categories'])) {
-            $categories = $_POST['categories'];
-            foreach ($categories as $category) {
-                if (in_array($category, $allowedCategories)) {
-                    $newCategories[] = $category;
-                }
-            }
-            $removedCategories = array_diff($user->getCategories(), $newCategories);
-            $user->setCategories($newCategories);
-        }
-
         $response = [];
         if (!$user->save()) {
-            //update or session
-            if ($user->getGuid() == Core\Session::getLoggedInUser()->getGuid()) {
-                $_SESSION['user'] = $user;
-            }
-
             $response['status'] = 'error';
-        }
-
-        // if the user was saved correctly, also update categories table
-        if (isset($_POST['categories'])) {
-            $repository->setFilter('opt-in')
-                ->setCategories($removedCategories)
-                ->setType('user')
-                ->remove($user->guid);
-
-            $repository->reset()
-                ->setCategories($newCategories)
-                ->add($user->guid);
         }
 
         return Factory::response($response);

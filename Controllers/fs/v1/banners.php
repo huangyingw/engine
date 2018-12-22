@@ -17,6 +17,11 @@ class banners implements Interfaces\FS
     public function get($pages)
     {
         $entity = Entities\Factory::build($pages[0]);
+
+        if (!$entity) {
+            exit;
+        }
+
         $type = '';
         $filepath = "";
 
@@ -94,11 +99,6 @@ class banners implements Interfaces\FS
             if(!$content){
                 exit;
             }
-        }
-
-        if($_GET['testing']){
-            echo $f->getFilenameOnFilestore();
-            echo $content;exit;
         }
 
         $finfo    = finfo_open(FILEINFO_MIME);

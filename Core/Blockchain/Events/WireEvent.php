@@ -8,7 +8,6 @@
 
 namespace Minds\Core\Blockchain\Events;
 
-use Minds\Core\Blockchain\Contracts\MindsToken;
 use Minds\Core\Blockchain\Util;
 use Minds\Core\Di\Di;
 use Minds\Core\Util\BigNumber;
@@ -25,9 +24,13 @@ class WireEvent implements BlockchainEventInterface
     /** @var Manager $manager */
     private $manager;
 
-    public function __construct($manager = null)
+    /** @var Config $config */
+    private $config;
+
+    public function __construct($manager = null, $config = null)
     {
         $this->manager = $manager ?: Di::_()->get('Wire\Manager');
+        $this->config = $config ?: Di::_()->get('Config');
     }
 
     /**
@@ -47,6 +50,10 @@ class WireEvent implements BlockchainEventInterface
     {
         $method = static::$eventsMap[$topic];
 
+        if ($log['address'] != $this->config->get('blockchain')['contracts']['wire']['contract_address']) {
+            throw new \Exception('Event does not match address');
+        }
+
         if (method_exists($this, $method)) {
             $this->{$method}($log, $transaction);
         } else {
@@ -56,10 +63,10 @@ class WireEvent implements BlockchainEventInterface
 
     public function wireSent($log, $transaction)
     {
-        $token = MindsToken::at(Di::_()->get('Config')->get('blockchain')['token_address']);
+        // $token = MindsToken::at(Di::_()->get('Config')->get('blockchain')['token_address']);
 
-        $tx = $log['transactionHash'];
-        list($sender, $receiver, $amount) = Util::parseData($log['data']);
+        // $tx = $log['transactionHash'];
+        list($sender, $receiver, $amount) = Util::parseData($log['data'], [Util::ADDRESS, Util::ADDRESS, Util::NUMBER]);
         $amount = (string) BigNumber::fromHex($amount);
 
         $data = $transaction->getData();

@@ -9,6 +9,7 @@ use Aws\ElasticTranscoder\ElasticTranscoderClient;
 use Aws\S3\S3Client;
 use FFMpeg\FFMpeg as FFMpegClient;
 use FFMpeg\FFProbe as FFProbeClient;
+use FFMpeg\Filters\Video\ResizeFilter;
 use Minds\Core;
 use Minds\Core\Config;
 use Minds\Core\Di\Di;
@@ -81,7 +82,7 @@ class FFMpeg implements ServiceInterface
     {
         try {
             if (is_string($file)) {
-                
+
                 $result =  $this->s3->putObject([
                   'ACL' => 'public-read',
                   'Bucket' => 'cinemr',
@@ -141,10 +142,24 @@ class FFMpeg implements ServiceInterface
 
         $video = $this->ffmpeg->open($sourcePath);
 
+        $tags = null;
+
+        try {
+            $videostream = $this->ffprobe
+                ->streams($sourcePath)
+                ->videos()
+                ->first();
+
+            // get video metadata
+            $tags = $videostream->get('tags');
+        } catch (\Exception $e)  {
+            error_log('Error getting videostream information');
+        }
+
         try {
             $thumbnailsDir = $sourcePath . '-thumbnails';
             @mkdir($thumbnailsDir, 0600, true);
-            
+
             //create thumbnails
             $length = round((int) $this->ffprobe->format($sourcePath)->get('duration'));
             $secs = [ 0, 1, round($length/2), $length -1, $length ];
@@ -163,6 +178,8 @@ class FFMpeg implements ServiceInterface
         } catch (\Exception $e)  {
         }
 
+        $rotated = isset($tags['rotate']) && in_array($tags['rotate'], [270,90]);
+
         $outputs = [];
         $presets = $this->config->get('transcoder')['presets'];
         foreach ($presets as $prefix => $opts) {
@@ -175,10 +192,18 @@ class FFMpeg implements ServiceInterface
                 'formats' => [ 'mp4', 'webm' ],
             ], $opts);
 
+            if ($rotated) {
+                $ratio = $videostream->get('width') / $videostream->get('height');
+                $width = round($opts['height'] * $ratio);
+                $opts['width']  = $opts['height'];
+                $opts['height'] = $width;
+            }
+
             $video->filters()
-                ->resize(new \FFMpeg\Coordinate\Dimension($opts['width'], $opts['height']))
+                ->resize(new \FFMpeg\Coordinate\Dimension($opts['width'], $opts['height']),
+                    $rotated ? ResizeFilter::RESIZEMODE_FIT : ResizeFilter::RESIZEMODE_SCALE_WIDTH)
                 ->synchronize();
-            
+
             $formatMap = [
                 'mp4' => (new \FFMpeg\Format\Video\X264())
                     ->setAudioCodec("aac"),
@@ -186,7 +211,7 @@ class FFMpeg implements ServiceInterface
             ];
 
             foreach ($opts['formats'] as $format) {
-                $pfx = $opts['height'] . "." . $format;
+                $pfx = ($rotated ? $opts['width'] : $opts['height']) . "." . $format;
                 $path = $sourcePath . '-' . $pfx;
                 try {
                     echo "\nTranscoding: $path ($this->key)";
@@ -195,11 +220,11 @@ class FFMpeg implements ServiceInterface
                         ->setAudioChannels(2)
                         ->setAudioKiloBitrate($opts['audio_bitrate']);
                     $video->save($formatMap[$format], $path);
-                
+
                     //now upload to s3
                     $this->uploadTranscodedFile($path, $pfx);
                     //cleanup tmp file
-                    @unlink($path);    
+                    @unlink($path);
                 } catch (\Exception $e) {
                     echo " failed {$e->getMessage()}";
                 }

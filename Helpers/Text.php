@@ -20,7 +20,11 @@ class Text
         $text = preg_replace('~[^\pL\d]+~u', '-', $text);
 
         // transliterate
-        $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
+        $transliteratedText = @iconv('utf-8', 'us-ascii//TRANSLIT//IGNORE', $text);
+
+        if ($transliteratedText) {
+            $text = $transliteratedText;
+        }
 
         // remove unwanted characters
         $text = preg_replace('~[^-\w]+~', '', $text);
@@ -40,5 +44,15 @@ class Text
         $text = strtolower($text);
 
         return $text;
+    }
+
+    public static function camel($text)
+    {
+        return lcfirst(str_replace(['_', ':'], '', ucwords($text, '_:')));
+    }
+
+    public static function snake($text)
+    {
+        return strtolower(preg_replace(['/([a-z\d])([A-Z])/', '/([^_])([A-Z][a-z])/'], '$1_$2', $text));
     }
 }

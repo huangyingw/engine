@@ -11,11 +11,12 @@ namespace Minds\Controllers\api\v1\boost;
 
 use Minds\Api\Factory;
 use Minds\Core;
+use Minds\Core\Di\Di;
 use Minds\Entities;
 use Minds\Helpers\Counters;
 use Minds\Interfaces;
 
-class fetch implements Interfaces\Api, Interfaces\ApiIgnorePam
+class fetch implements Interfaces\Api
 {
 
     /**
@@ -27,7 +28,14 @@ class fetch implements Interfaces\Api, Interfaces\ApiIgnorePam
         $response = [];
         $user = Core\Session::getLoggedinUser();
 
-        if ($user->disabled_boost && $user->plus) {
+        if (!$user) {
+            return Factory::response([
+                'status' => 'error',
+                'message' => 'You must be loggedin to view boosts',
+            ]);
+        }
+
+        if ($user->disabled_boost && $user->isPlus()) {
             return Factory::response([]);
         }
 
@@ -72,6 +80,19 @@ class fetch implements Interfaces\Api, Interfaces\ApiIgnorePam
                     Counters::increment($entity->owner_guid, "impression");
                 }
                 $response['load-next'] = $iterator->getOffset();
+                
+                if (!$response['boosts']) {
+                    $result = Di::_()->get('Trending\Repository')->getList([
+                        'type' => 'images',
+                        'rating' => isset($rating) ? (int) $rating : 1,
+                        'limit' => $limit,
+                    ]);
+
+                    if ($result && isset($result['guids'])) {
+                        $entities = Core\Entities::get([ 'guids' => $result['guids'] ]);
+                        $response['boosts'] = Factory::exportable($entities);
+                    }
+                }
                 break;
             case 'newsfeed':
                 foreach ($iterator as $guid => $entity) {

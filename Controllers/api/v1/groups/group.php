@@ -40,9 +40,24 @@ class group implements Interfaces\Api
             $notifications = (new Core\Groups\Notifications)
               ->setGroup($group);
 
-            $response['group']['is:muted'] = $notifications->isMuted($user);
+            $response['group']['is:muted'] = $user && $notifications->isMuted($user);
 
-            if ($group->isOwner($user)) {
+            $canRead = $user && ($membership->isMember($user) || $user->isAdmin());
+            $canModerate = $user && ($group->isOwner($user) || $group->isModerator($user));
+
+            if (!$canRead) {
+                // Restrict output if cannot read
+                $allowed = ['guid', 'name', 'membership', 'type', 'is:awaiting', 'is:invited' ];
+                if ($response['group']['membership'] == 2) {
+                    $allowed = array_merge($allowed, ['members:count', 'activity:count', 'comments:count']);
+                }
+
+                $response['group'] = array_filter($response['group'], function ($key) use ($allowed) {
+                    return in_array($key, $allowed);
+                }, ARRAY_FILTER_USE_KEY);
+            }
+
+            if ($canModerate) {
                 /** @var Core\Groups\Feeds $feeds */
                 $feeds = Core\Di\Di::_()->get('Groups\Feeds');
                 $count = (int) $feeds->setGroup($group)->count();

@@ -32,25 +32,6 @@ class Video extends Object
         parent::__construct($guid);
     }
 
-    public function cinemr()
-    {
-        return new cinemr\sdk\client(array(
-                'account_guid' => '335988155444367360',
-                            'secret' => '+/rW1ArsueEjXK++0zkxlBrbLkb5suHqvqZJ64kX8rk=',
-                'uri' => 'http://cinemr.minds.com'
-            ));
-    }
-
-    /**
-     * Get the status of the video
-     */
-    public function getStatus()
-    {
-        $cinemr = $this->cinemr();
-        $data = $cinemr::factory('media')->get($this->cinemr_guid);
-        return $data['status'];
-    }
-
     /**
      * Return the source url of the remote video
      * @param string $transcode
@@ -83,7 +64,7 @@ class Video extends Object
     {
         $domain = elgg_get_site_url();
         global $CONFIG;
-        if (isset($CONFIG->cdn_url)) {
+        if (isset($CONFIG->cdn_url) && !$this->getFlag('paywall') && !$this->getWireThreshold()) {
             $domain = $CONFIG->cdn_url;
         }
 
@@ -111,14 +92,6 @@ class Video extends Object
     {
         $this->super_subtype = 'archive';
         parent::save((!$this->guid || $force));
-
-        $cinemr = $this->cinemr();
-        $cinemr::factory('media')->post($this->cinemr_guid, array(
-                'title' => $this->title,
-                'description' => $this->description,
-                'minds_guid' => $this->guid,
-                'minds_owner' => $this->owner_guid
-            ));
         return $this->guid;
     }
 
@@ -128,9 +101,6 @@ class Video extends Object
     public function delete()
     {
         $result = parent::delete();
-
-        $cinemr = $this->cinemr();
-        $cinemr::factory('media')->delete($this->cinemr_guid);
 
         return $result;
     }

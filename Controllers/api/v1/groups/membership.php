@@ -29,6 +29,12 @@ class membership implements Interfaces\Api
           ->setGroup($group)
           ->setActor(Session::getLoggedInUser());
 
+        $loggedInUser = Core\Session::getLoggedinUser();
+
+        if (!$group->isPublic() && !$membership->isMember($loggedInUser) && !$loggedInUser->isAdmin()) {
+            return Factory::response([]);
+        }
+
         $options = [
             'limit' => isset($_GET['limit']) ? $_GET['limit'] : 12,
             'offset' => isset($_GET['offset']) ? $_GET['offset'] : ''
@@ -107,11 +113,26 @@ class membership implements Interfaces\Api
                     $response['members'] = Factory::exportable($members);
 
                     for ($i = 0; $i < count($response['members']); $i++) {
+                        $response['members'][$i]['is:moderator'] = $group->isModerator($response['members'][$i]['guid']);
                         $response['members'][$i]['is:owner'] = $group->isOwner($response['members'][$i]['guid']);
                         $response['members'][$i]['is:member'] = true;
                         $response['members'][$i]['is:awaiting'] = false;
                     }
                 }
+            break;
+            case "owners":
+                if (!$membership->canActorRead($group)) {
+                    return Factory::response([]);
+                }
+
+                $owners = $membership->getOwners($options);
+
+                if (!$owners) {
+                    return Factory::response([]);
+                }
+
+                $response['owners'] = Factory::exportable($owners);
+                $response['load-next'] = end($owners)->getGuid();
                 break;
             case "members":
             default:
@@ -128,6 +149,7 @@ class membership implements Interfaces\Api
                 $response['members'] = Factory::exportable($members);
 
                 for ($i = 0; $i < count($response['members']); $i++) {
+                    $response['members'][$i]['is:moderator'] = $group->isModerator($response['members'][$i]['guid']);
                     $response['members'][$i]['is:owner'] = $group->isOwner($response['members'][$i]['guid']);
                     $response['members'][$i]['is:member'] = true;
                     $response['members'][$i]['is:awaiting'] = false;
@@ -248,6 +270,17 @@ class membership implements Interfaces\Api
             } else {
                 $joined = $group->join($user);
             }
+
+            $event = new Core\Analytics\Metrics\Event();
+            $event->setType('action')
+                ->setProduct('platform')
+                ->setAction("join")
+                ->setEntityMembership(2)
+                ->setUserGuid((string) $user->guid)
+                ->setUserPhoneNumberHash($user->getPhoneNumberHash())
+                ->setEntityGuid((string) $group->guid)
+                ->setEntityType($group->type)
+                ->push();
 
             return Factory::response([
                 'done' => $joined

@@ -27,6 +27,7 @@ class rewards implements Interfaces\Api
                     return Factory::response(['status' => 'error', 'message' => 'phone field is required']);
                 }
                 $number = $_POST['number'];
+                $resend = $_POST['retry'];
 
                 try {
                     $join = new Join();
@@ -34,7 +35,11 @@ class rewards implements Interfaces\Api
                         ->setUser(Session::getLoggedInUser())
                         ->setNumber($number);
 
-                    $secret = $join->verify();
+                    if (!$resend) {
+                        $secret = $join->verify();
+                    } else {
+                        $secret = $join->resendCode();
+                    }
 
                     $response['secret'] = $secret;
                 } catch (\Exception $e) {
@@ -74,9 +79,6 @@ class rewards implements Interfaces\Api
 
                     $response['phone_number_hash'] = $user->getPhoneNumberHash();
 
-                    Session::regenerate(false, $user);
-                    //sync our change to our other sessions
-                    (new Core\Data\Sessions())->syncAll($user->guid);
                 } catch (\Exception $e) {
                     $response = [
                         'status' => 'error',

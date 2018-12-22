@@ -30,7 +30,7 @@ class Repository
         }
 
         $requests = [];
-        $template = "INSERT INTO blockchain_transactions (
+        $template = "INSERT INTO blockchain_transactions_mainnet (
             user_guid,
             wallet_address,
             timestamp,
@@ -38,9 +38,10 @@ class Repository
             contract,
             amount,
             completed,
+            failed,
             data
             ) 
-            VALUES (?,?,?,?,?,?,?,?)";
+            VALUES (?,?,?,?,?,?,?,?,?)";
         foreach ($transactions as $transaction) {
             $requests[] = [
                 'string' => $template, 
@@ -52,6 +53,7 @@ class Repository
                     $transaction->getContract(),
                     new Varint($transaction->getAmount()),
                     $transaction->isCompleted(),
+                    $transaction->isFailed(),
                     json_encode($transaction->getData()),
                 ]
             ];
@@ -80,12 +82,12 @@ class Repository
             'allowFiltering' => false,
         ], $options);
 
-        $cql = "SELECT * from blockchain_transactions";
+        $cql = "SELECT * from blockchain_transactions_mainnet";
         $where = [];
         $values = [];
 
         if ($options['wallet_address'] && $options['user_guid'] && ($options['timestamp']['gte'] || $options['timestamp']['lte'])) {
-            $cql = "SELECT * from blockchain_transactions_by_address";
+            $cql = "SELECT * from blockchain_transactions_mainnet_by_address";
         }
 
         if ($options['user_guid']) {
@@ -144,7 +146,9 @@ class Repository
         $query->query($cql, $values);
         $query->setOpts([
             'page_size' => (int) $options['limit'],
-            'paging_state_token' => base64_decode($options['offset'])
+            'paging_state_token' => base64_decode($options['offset']),
+            'consistency' => \Cassandra::CONSISTENCY_ALL,
+            'retry_policy' => new \Cassandra\RetryPolicy\Logging(new \Cassandra\RetryPolicy\DowngradingConsistency())
         ]);
 
         $transactions = [];
@@ -170,6 +174,7 @@ class Repository
                 ->setContract($row['contract'])            
                 ->setAmount((string) BigNumber::_($row['amount']))
                 ->setCompleted((bool) $row['completed'])
+                ->setFailed((bool) $row['failed'])
                 ->setData(json_decode($row['data'], true));
                 
             $transactions[] = $transaction;
@@ -184,7 +189,7 @@ class Repository
     public function get($user_guid, $tx)
     {
 
-        $cql = "SELECT * from blockchain_transactions_by_tx WHERE tx = ? AND user_guid = ?";
+        $cql = "SELECT * from blockchain_transactions_mainnet_by_tx WHERE tx = ? AND user_guid = ?";
         $values = [ (string) $tx, new Varint($user_guid) ];
 
         $query = new Custom();
@@ -212,14 +217,58 @@ class Repository
             ->setContract($row['contract'])            
             ->setAmount((string) BigNumber::_($row['amount']))
             ->setCompleted((bool) $row['completed'])
+            ->setFailed((bool) $row['failed'])
             ->setData(json_decode($row['data'], true));
             
         return $transaction;
 
     }
 
+    public function update($transaction, array $dirty = [])
+    {
+        $template = "UPDATE blockchain_transactions_mainnet";
+        $values = [];
+        $set = [];
+
+        foreach ($dirty as $key) {
+            $value = null;
+            switch ($key) {
+                case 'amount':
+                    $value = new Cassandra\Varint($transaction->getAmount());
+                    break;
+                case 'failed':
+                    $value = (bool) $transaction->isFailed();
+                    break;
+            }
+
+            $set[] = "{$key} = ?";
+            $values[] = $value;
+        }
+
+        if ($set) {
+            $template .= ' SET ';
+        }
+
+        $template .= implode(", ", $set);
+
+        $template .= " WHERE user_guid = ? AND timestamp = ?";
+        $values[] = new Varint($transaction->getUserGuid());
+        $values[] = new Timestamp($transaction->getTimestamp());
+
+        $query = new Custom();
+        $query->query($template, $values);
+
+        try {
+            $success = $this->db->request($query);
+        } catch (\Exception $e) {
+            return false;
+        }
+
+        return (bool) $success;
+    }
+
     public function delete($user_guid, $timestamp, $wallet_address) {
-        $cql = "DELETE FROM blockchain_transactions where user_guid = ? AND timestamp = ?";
+        $cql = "DELETE FROM blockchain_transactions_mainnet where user_guid = ? AND timestamp = ?";
         $values = [ new Varint($user_guid), new Timestamp($timestamp) ];
 
         $query = new Custom();
