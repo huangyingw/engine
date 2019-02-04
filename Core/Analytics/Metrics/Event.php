@@ -20,6 +20,8 @@ use Minds\Interfaces\AnalyticsMetric;
  * @method Event setEntitySubtype($value)
  * @method Event setEntityOwnerGuid($value)
  * @method Event setCommentGuid($value)
+ * @method Event setRatelimitKey($value)
+ * @method Event setRatelimitPeriod($value)
  */
 class Event
 {
@@ -42,6 +44,10 @@ class Event
     public function push()
     {
         $this->data['@timestamp'] = (int) microtime(true) * 1000;
+
+        $this->data['user_agent'] = $this->getUserAgent();
+        $this->data['ip_hash'] = $this->getIpHash();
+        $this->data['ip_range_hash'] = $this->getIpRangeHash();
 
         if (!isset($this->data['platform'])) {
             $platform = isset($_REQUEST['cb']) ? 'mobile' : 'browser';
@@ -87,4 +93,33 @@ class Event
          return $this->data;
      }
 
+     /**
+      * For security, record the user agent
+      * @return string
+      */
+     protected function getUserAgent()
+     {
+         if (isset($_SERVER['HTTP_USER_AGENT'])) {
+             return $_SERVER['HTTP_USER_AGENT'];
+         }
+         return '';
+     }
+
+     protected function getIpHash()
+     {
+        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            return hash('sha256', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        }
+        return '';
+     }
+
+    protected function getIpRangeHash()
+    {
+        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $parts = explode('.', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            array_pop($parts);
+            return hash('sha256', implode('.', $parts));
+        }
+        return '';
+    }
 }

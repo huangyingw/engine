@@ -64,7 +64,7 @@ class TokenSaleEvent extends AbstractReport
 
         // fetch data from etherscan service
         $data = $service->setAddress($this->token_sale_event_wallet)
-            ->setInternal(true)
+            ->setType('internal')
             ->getRange($this->from, $this->to);
 
         // fetch prices for the date interval

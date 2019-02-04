@@ -9,7 +9,7 @@ use Minds\Core\Data\ElasticSearch;
 class ChannelVotes extends Aggregate
 {
 
-    protected $multiplier = 1;
+    protected $multiplier = 2;
 
     public function get()
     {
@@ -30,13 +30,13 @@ class ChannelVotes extends Aggregate
             ]
         ];
 
-        /*if ($this->type) {
+        if ($this->type) {
             $must[]['match'] = [
-                'entity_type' => $this->type
+                'entity_type' => 'activity',
             ];
         }
 
-        if ($this->subtype) {
+        /*if ($this->subtype) {
             $must[]['match'] = [
                 'entity_subtype' => $this->subtype
             ];
@@ -50,7 +50,15 @@ class ChannelVotes extends Aggregate
                 'query' => [
                     'bool' => [
                         //'filter' => $filter,
-                        'must' => $must
+                        'must' => $must,
+                        'must_not' => [
+                            [
+                                'term' => [
+                                    'is_remind' => true,
+                                ],
+
+                            ],
+                            ],
                     ]
                 ],
                 'aggs' => [
@@ -65,8 +73,8 @@ class ChannelVotes extends Aggregate
                         'aggs' => [
                             'uniques' => [
                                 'cardinality' => [
-                                    'field' => 'user_phone_number_hash.keyword',
-                                    'precision_threshold' => 40000
+                                    'field' => 'user_guid.keyword',
+                                //    'precision_threshold' => 40000
                                 ]
                             ]
                         ]
