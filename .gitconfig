@@ -1,0 +1,10 @@
+[remote "github"]
+    url = git@github.com:huangyingw/engine.git
+    fetch = +refs/heads/*:refs/remotes/github/*
+[commit]
+    message = n
+[gsync]
+    remote = origin
+    branch = master
+[push]
+    remote = github
