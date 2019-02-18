@@ -5,9 +5,9 @@
 
 namespace Minds\Core\Email;
 
-use Minds\Core\Di\Provider;
+use Minds\Core\Di\Provider as DiProvider;
 
-class EmailProvider extends Provider
+class Provider extends DiProvider
 {
     public function register()
     {
@@ -24,6 +24,10 @@ class EmailProvider extends Provider
 
         $this->di->bind('Email\Repository', function ($di) {
             return new Repository();
+        }, ['useFactory' => true]);
+
+        $this->di->bind('Email\Verify\Manager', function ($di) {
+            return new Verify\Manager;
         }, ['useFactory' => true]);
     }
 }

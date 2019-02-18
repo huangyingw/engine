@@ -123,6 +123,7 @@ class RepositorySpec extends ObjectBehavior
         $return = $this->getList([
             'entity_guid' => 5000,
             'limit' => 2,
+            'token' => '',
         ]);
 
         $return
@@ -145,7 +146,8 @@ class RepositorySpec extends ObjectBehavior
             ->shouldNotBecalled();
 
         $return = $this->getList([
-            'entity_guid' => 5000
+            'entity_guid' => 5000,
+            'token' => '',
         ]);
 
         $return
@@ -173,10 +175,8 @@ class RepositorySpec extends ObjectBehavior
     {
         $fields = [
             'owner_guid' => 1000,
-            'container_guid' => 1000,
             'time_created' => 123123123,
             'time_updated' => 123123124,
-            'access_id' => 2,
             'description' => 'phpspec',
             'mature' => false,
             'edited' => true,
@@ -185,15 +185,12 @@ class RepositorySpec extends ObjectBehavior
             'owner_obj' => [],
             'parent_guid' => 5000,
             'guid' => 6000,
+            'type' => 'comment',
         ];
 
         $comment->getOwnerGuid()
             ->shouldBeCalled()
             ->willReturn($fields['owner_guid']);
-
-        $comment->getContainerGuid()
-            ->shouldBeCalled()
-            ->willReturn($fields['container_guid']);
 
         $comment->getTimeCreated()
             ->shouldBeCalled()
@@ -202,10 +199,6 @@ class RepositorySpec extends ObjectBehavior
         $comment->getTimeUpdated()
             ->shouldBeCalled()
             ->willReturn($fields['time_updated']);
-
-        $comment->getAccessId()
-            ->shouldBeCalled()
-            ->willReturn($fields['access_id']);
 
         $comment->getBody()
             ->shouldBeCalled()
@@ -258,10 +251,8 @@ class RepositorySpec extends ObjectBehavior
         $this
             ->add($comment, [
                 'ownerGuid',
-                'containerGuid',
                 'timeCreated',
                 'timeUpdated',
-                'accessId',
                 'body',
                 'attachments',
                 'mature',
@@ -352,11 +343,15 @@ class RepositorySpec extends ObjectBehavior
         Comment $comment
     )
     {
-        $this->entities->getRow('6000')
+        $this->entities->getRow('6000', Argument::any())
             ->shouldBeCalled()
-            ->willReturn([ 'type' => 'comment' ]);
+            ->willReturn([ 'type' => 'comment', 'parent_guid' => 1 ]);
 
-        $this->legacyEntity->build([ 'type' => 'comment', 'guid' => '6000' ])
+        $this->legacyEntity->build([ 
+                'type' => 'comment',
+                'guid' => '6000',
+                'parent_guid' => 1
+            ])
             ->shouldBeCalled()
             ->willReturn($comment);
 
@@ -367,9 +362,9 @@ class RepositorySpec extends ObjectBehavior
 
     function it_should_catch_exception_and_return_null_during_get_by_guid()
     {
-        $this->entities->getRow('6001')
+        $this->entities->getRow('6001', Argument::any())
             ->shouldBeCalled()
-            ->willReturn([ 'type' => 'comment' ]);
+            ->willReturn([ 'type' => 'comment', 'parent_guid' => 1 ]);
 
         $this->legacyEntity->build(Argument::cetera())
             ->shouldBeCalled()
@@ -382,7 +377,7 @@ class RepositorySpec extends ObjectBehavior
 
     function it_should_return_null_if_not_a_comment_row_during_get_by_guid()
     {
-        $this->entities->getRow('5000')
+        $this->entities->getRow('5000', Argument::any())
             ->shouldBeCalled()
             ->willReturn([ 'type' => 'activity' ]);
 

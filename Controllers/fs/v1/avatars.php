@@ -27,9 +27,9 @@ class avatars implements Interfaces\FS
         $guid = null;
         $type = null;
 
-        if (method_exists($entity, 'getType')) {
+        if ($entity && method_exists($entity, 'getType')) {
             $type = $entity->getType();
-        } elseif (property_exists($entity, 'type')) {
+        } elseif ($entity && property_exists($entity, 'type')) {
             $type = $entity->type;
         }
 
@@ -53,14 +53,20 @@ class avatars implements Interfaces\FS
                 break;
         }
 
-        $contents = $f->read();
+        $contents = $f ? $f->read() : null;
         if (empty($contents)) {
-            $contents = file_get_contents(Core\Config::build()->path . "engine/Assets/avatars/default-$size.png");
+            $filepath = Core\Config::build()->path . "engine/Assets/avatars/default-$size.png";
+            $contents = file_get_contents($filepath);
         }
 
-        $finfo    = finfo_open(FILEINFO_MIME);
-        $mimetype = finfo_file($finfo, $filepath);
-        finfo_close($finfo);
+        if ($filepath) {
+            $finfo    = finfo_open(FILEINFO_MIME);
+            $mimetype = finfo_file($finfo, $filepath);
+            finfo_close($finfo);
+        } else {
+            $mimetype = 'image/jpeg';
+        }
+
         header('Content-Type: '.$mimetype);
         header('Expires: ' . date('r', time() + 864000));
         header("Pragma: public");

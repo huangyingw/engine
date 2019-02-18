@@ -68,6 +68,29 @@ class Manager
         $this->entitiesBuilder = $entitiesBuilder  ?: Di::_()->get('EntitiesBuilder');
     }
 
+    public function get($entity_guid, $parent_path, $guid)
+    {
+        return $this->repository->get($entity_guid, $parent_path, $guid);
+    }
+
+    public function getList($opts = [])
+    {
+        $opts = array_merge([
+            'entity_guid' => null,
+            'parent_guid' => null,
+            'guid' => null,
+            'limit' => null,
+            'offset' => null,
+            'descending' => true
+        ], $opts);
+
+        if ($this->legacyRepository->isLegacy($opts['entity_guid'])) {
+            return $this->legacyRepository->getList($opts);
+        }
+
+        return $this->repository->getList($opts);
+    }
+
     /**
      * Adds a comment and triggers creation events
      * @param Comment $comment
@@ -92,12 +115,20 @@ class Manager
             throw new BlockedUserException();
         }
 
+        try {
+            if ($this->legacyRepository->isFallbackEnabled()) {
+                $this->legacyRepository->add($comment, Repository::$allowedEntityAttributes, false);
+            }
+        } catch (\Exception $e) {
+            error_log("[Comments\Repository::add/legacy] {$e->getMessage()} > " . get_class($e));
+        }
+
         $success = $this->repository->add($comment);
 
         if ($success) {
             // NOTE: It's important to _first_ notify, then subscribe.
             $this->threadNotifications->notify($comment);
-            $this->threadNotifications->subscribeOwner($comment);
+            //$this->threadNotifications->subscribeOwner($comment);
 
             $this->metrics->push($comment);
 
@@ -117,6 +148,10 @@ class Manager
      */
     public function update(Comment $comment)
     {
+        if ($this->legacyRepository->isFallbackEnabled()) {
+            $this->legacyRepository->add($comment, $comment->getDirtyAttributes(), true);
+        }
+
         return $this->repository->update($comment, $comment->getDirtyAttributes());
     }
 
@@ -126,8 +161,16 @@ class Manager
      * @return bool
      * @throws \Exception
      */
-    public function delete(Comment $comment)
+    public function delete(Comment $comment, $opts = [])
     {
+        $opts = array_merge([
+                    'force' => false,
+                ], $opts);
+
+        if (!$this->acl->write($comment) && !$opts['force']) {
+            return false; //TODO throw exception
+        }
+
         $success = $this->repository->delete($comment);
 
         if ($success) {
@@ -148,7 +191,11 @@ class Manager
         try {
             $luid = new Luid($luid);
 
-            return $this->repository->get($luid->getEntityGuid(), $luid->getParentGuid(), $luid->getGuid());
+            if ($this->legacyRepository->isLegacy($luid->getEntityGuid())) {
+                return $this->legacyRepository->getByGuid($luid->getGuid());
+            }
+
+            return $this->repository->get($luid->getEntityGuid(), $luid->getPartitionPath(), $luid->getGuid());
         } catch (InvalidLuidException $e) {
             // Fallback to old GUIDs
             if (is_numeric($luid) && strlen($luid) >= 18) {

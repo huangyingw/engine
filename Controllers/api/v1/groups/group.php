@@ -31,39 +31,44 @@ class group implements Interfaces\Api
 
         $response = [];
 
-        if ($group) {
-            $response['group'] = $group->export();
+        if (!$group) {
+            return Factory::response([
+                'status' => 'error',
+                'message' => 'The group could not be found',
+            ]);
+        }
 
-            $membership = (new Core\Groups\Membership)
-              ->setGroup($group);
+        $response['group'] = $group->export();
 
-            $notifications = (new Core\Groups\Notifications)
-              ->setGroup($group);
+        $membership = (new Core\Groups\Membership)
+          ->setGroup($group);
 
-            $response['group']['is:muted'] = $user && $notifications->isMuted($user);
+        $notifications = (new Core\Groups\Notifications)
+          ->setGroup($group);
 
-            $canRead = $user && ($membership->isMember($user) || $user->isAdmin());
-            $canModerate = $user && ($group->isOwner($user) || $group->isModerator($user));
+        $response['group']['is:muted'] = $user && $notifications->isMuted($user);
 
-            if (!$canRead) {
-                // Restrict output if cannot read
-                $allowed = ['guid', 'name', 'membership', 'type', 'is:awaiting', 'is:invited' ];
-                if ($response['group']['membership'] == 2) {
-                    $allowed = array_merge($allowed, ['members:count', 'activity:count', 'comments:count']);
-                }
+        $canRead = $user && ($membership->isMember($user) || $user->isAdmin());
+        $canModerate = $user && ($group->isOwner($user) || $group->isModerator($user));
 
-                $response['group'] = array_filter($response['group'], function ($key) use ($allowed) {
-                    return in_array($key, $allowed);
-                }, ARRAY_FILTER_USE_KEY);
+        if (!$canRead) {
+            // Restrict output if cannot read
+            $allowed = ['guid', 'name', 'membership', 'type', 'is:awaiting', 'is:invited' ];
+            if ($response['group']['membership'] == 2) {
+                $allowed = array_merge($allowed, ['members:count', 'activity:count', 'comments:count']);
             }
 
-            if ($canModerate) {
-                /** @var Core\Groups\Feeds $feeds */
-                $feeds = Core\Di\Di::_()->get('Groups\Feeds');
-                $count = (int) $feeds->setGroup($group)->count();
+            $response['group'] = array_filter($response['group'], function ($key) use ($allowed) {
+                return in_array($key, $allowed);
+            }, ARRAY_FILTER_USE_KEY);
+        }
 
-                $response['group']['adminqueue:count'] = $count;
-            }
+        if ($canModerate) {
+            /** @var Core\Groups\Feeds $feeds */
+            $feeds = Core\Di\Di::_()->get('Groups\Feeds');
+            $count = (int) $feeds->setGroup($group)->count();
+
+            $response['group']['adminqueue:count'] = $count;
         }
 
         return Factory::response($response);
@@ -98,13 +103,27 @@ class group implements Interfaces\Api
             switch ($pages[1]) {
                 case "avatar":
                     if (is_uploaded_file($_FILES['file']['tmp_name'])) {
-                        $this->uploadAvatar($group);
+                        try {
+                            $this->uploadAvatar($group);
+                        } catch (\Exception $e) {
+                            return Factory::response([
+                                'status' => 'error',
+                                'message' => $e->getMessage()
+                            ]);
+                        }
                         $response['done'] = true;
                     }
                     break;
                 case "banner":
                     if (is_uploaded_file($_FILES['file']['tmp_name'])) {
-                        $this->uploadBanner($group, $_POST['banner_position']);
+                        try {
+                            $this->uploadBanner($group, $_POST['banner_position']);
+                        } catch (\Exception $e) {
+                            return Factory::response([
+                                'status' => 'error',
+                                'message' => $e->getMessage()
+                            ]);
+                        }
                         $response['done'] = true;
                     }
                     break;
@@ -158,7 +177,7 @@ class group implements Interfaces\Api
             $group->setDefaultView($_POST['default_view']);
         }
 
-        if (isset($_POST['videoChatDisabled']) && Core\Session::isAdmin()) {
+        if (isset($_POST['videoChatDisabled'])) {
             $group->setVideoChatDisabled($_POST['videoChatDisabled']);
         }
 
@@ -202,7 +221,14 @@ class group implements Interfaces\Api
 
         // Legacy behavior
         if (isset($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
-            $this->uploadBanner($group, $_POST['banner_position']);
+            try {
+                $this->uploadBanner($group, $_POST['banner_position']);
+            } catch (\Exception $e) {
+                return Factory::response([
+                    'status' => 'error',
+                    'message' => $e->getMessage()
+                ]);
+            }
         }
 
         $response = array();
@@ -271,6 +297,8 @@ class group implements Interfaces\Api
      * Uploads a Group avatar
      * @param  GroupEntity $group
      * @return GroupEntity
+     * @throws \IOException
+     * @throws \InvalidParameterException
      */
     protected function uploadAvatar(GroupEntity $group)
     {
@@ -297,7 +325,10 @@ class group implements Interfaces\Api
     /**
      * Uploads a Group banner
      * @param  GroupEntity $group
+     * @param $banner_position
      * @return GroupEntity
+     * @throws \IOException
+     * @throws \InvalidParameterException
      */
     protected function uploadBanner($group, $banner_position)
     {

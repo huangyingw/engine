@@ -100,7 +100,7 @@ class Repository
 
         $guids = $this->indexes->getRow("comments:{$opts['entity_guid']}", [
             'limit' => $opts['limit'],
-            'offset' => $opts['offset'] ? base64_decode($opts['offset']) : '',
+            'offset' => $opts['token'] ? base64_decode($opts['token']) : '',
             'reversed' => $opts['descending']
         ]);
 
@@ -156,20 +156,12 @@ class Repository
             $fields['owner_guid'] = (string) $comment->getOwnerGuid();
         }
 
-        if (in_array('containerGuid', $attributes)) {
-            $fields['container_guid'] = (string) ($comment->getContainerGuid() ?: 0);
-        }
-
         if (in_array('timeCreated', $attributes)) {
             $fields['time_created'] = (string) $comment->getTimeCreated();
         }
 
         if (in_array('timeUpdated', $attributes)) {
             $fields['time_updated'] = (string) $comment->getTimeUpdated();
-        }
-
-        if (in_array('accessId', $attributes)) {
-            $fields['access_id'] = (string) $comment->getAccessId();
         }
 
         if (in_array('body', $attributes)) {
@@ -212,6 +204,7 @@ class Repository
         $fields = array_merge($fields, [
             'parent_guid' => (string) $comment->getEntityGuid(),
             'guid' => (string) $comment->getGuid(),
+            'type' => 'comment',
         ]);
 
         $guid = (string) $comment->getGuid();
@@ -261,9 +254,13 @@ class Repository
     public function getByGuid($guid)
     {
         try {
-            $row = $this->entities->getRow((string) $guid);
+            $row = $this->entities->getRow((string) $guid, [ 'limit' => 1000 ]);
 
-            if (!$row || $row['type'] !== 'comment') {
+            if (isset($row['parent_guid'])) {
+                $row['type'] = 'comment';
+            }
+
+            if (!$row || $row['type'] !== 'comment') { 
                 return null;
             }
 

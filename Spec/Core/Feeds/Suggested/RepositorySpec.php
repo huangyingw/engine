@@ -79,6 +79,29 @@ class RepositorySpec extends ObjectBehavior
         $this->getFeed(['user_guid' => 100, 'type' => 'activity', 'hashtag' => 'hashtag'])->shouldReturn([$activity]);
     }
 
+    function it_should_get_the_suggested_feed_filtering_by_capitalized_hashtag(Activity $activity, \PDOStatement $statement)
+    {
+        $this->db->prepare(Argument::any())
+            ->shouldBeCalled()
+            ->willReturn($statement);
+
+        $statement->execute([
+            'hashtag',
+            'activity',
+            1,
+            12,
+            0
+        ])
+            ->shouldBeCalled();
+
+        $statement->fetchAll(\PDO::FETCH_ASSOC)
+            ->shouldBeCalled()
+            ->willReturn([$activity]);
+
+
+        $this->getFeed(['user_guid' => 100, 'type' => 'activity', 'hashtag' => 'HaShTag'])->shouldReturn([$activity]);
+    }
+
     function it_should_get_the_suggested_feed_ignoring_user_selected_hashtags(
         Activity $activity,
         \PDOStatement $statement
@@ -187,5 +210,18 @@ class RepositorySpec extends ObjectBehavior
             ->willReturn(true);
 
         $this->removeAll('activity')->shouldReturn(true);
+    }
+
+    function it_should_remove_a_key(\PDOStatement $statement) {
+        $this->db->prepare("DELETE FROM suggested WHERE guid = ?")
+            ->shouldBeCalled()
+            ->willReturn($statement);
+
+        $statement->execute([ 123123 ])
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->remove('key', 123123)
+            ->shouldReturn(true);
     }
 }

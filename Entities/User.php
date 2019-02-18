@@ -46,7 +46,8 @@ class User extends \ElggUser
 		$this->attributes['is_mature'] = 0;
 		$this->attributes['mature_lock'] = 0;
 		$this->attributes['opted_in_hashtags'] = 0;
-		$this->attributes['last_accepted_tos'] = Core\Config::_()->get('last_tos_update');
+        $this->attributes['last_accepted_tos'] = Core\Config::_()->get('last_tos_update');
+        $this->attributes['canary'] = 0;
 
         parent::initializeAttributes();
     }
@@ -673,6 +674,7 @@ class User extends \ElggUser
         $export['mature'] = (int) $this->getViewMature();
         $export['last_accepted_tos'] = (int) $this->getLastAcceptedTOS();
         $export['opted_in_hashtags'] = (int) $this->getOptedInHashtags();
+        $export['canary'] = (bool) $this->isCanary();
 
         if (is_string($export['social_profiles'])) {
             $export['social_profiles'] = json_decode($export['social_profiles']);
@@ -918,6 +920,35 @@ class User extends \ElggUser
             'mature_lock',
             'last_accepted_tos',
             'opted_in_hashtags',
+            'canary',
         ));
     }
+
+    public function getTags()
+    {
+        if (is_array($this->tags)) {
+            return $this->tags;
+        }
+        return json_decode($this->tags, true);
+    }
+
+    /**
+     * Check if user is in canary mode
+     * @return bool
+     */
+    public function isCanary()
+    {
+        return (bool) $this->canary;
+    }
+
+    /**
+     * Set the users canary status
+     * @var boolean $enabled
+     * @return $this
+     */
+    public function setCanary($enabled = true)
+    {
+        $this->canary = $enabled ? 1 : 0;
+    }
+
 }

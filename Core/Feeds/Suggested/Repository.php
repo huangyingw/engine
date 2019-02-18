@@ -40,6 +40,7 @@ class Repository
         }
 
         if ($opts['hashtag']) {
+            $opts['hashtag'] = strtolower($opts['hashtag']);
             $query = "SELECT DISTINCT suggested.guid as guid,
                         lastSynced, score
                       FROM suggested
@@ -191,5 +192,11 @@ class Repository
         $statement = $this->db->prepare($deleteQuery);
 
         return $statement->execute($guids);
+    }
+
+    public function remove($key, $guid)
+    {
+        $statement = $this->db->prepare("DELETE FROM suggested WHERE guid = ?");
+        return $statement->execute([ $guid ]);
     }
 }
