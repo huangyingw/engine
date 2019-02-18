@@ -5,14 +5,14 @@
 [vrun]
     silent = false
     async = false
-[remote "github"]
-    url = git@github.com:huangyingw/engine.git
-    fetch = +refs/heads/*:refs/remotes/github/*
+[remote "Minds"]
+    url = https://gitlab.com/Minds/engine
+    fetch = +refs/heads/*:refs/remotes/Minds/*
 [push]
-    remote = github
-[gsync]
     remote = origin
+[gsync]
+    remote = Minds
     branch = master
 [branch "dev"]
-    remote = github
+    remote = origin
     merge = refs/heads/dev
