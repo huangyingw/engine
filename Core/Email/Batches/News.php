@@ -70,10 +70,13 @@ class News implements EmailBatchInterface
         $i = 0;
         foreach ($iterator as $user) {
             $user = new \Minds\Entities\User('mark');
-            if ($user->bounced && false) {
+            $user->bounced = false;
+            if ($user->bounced) {
+                echo "\n[$i]: $user->guid ($iterator->offset) bounced";
                 continue;
             }
             $i++;
+            
             $campaign = new Campaigns\News();
 
             $campaign

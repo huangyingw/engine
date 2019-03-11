@@ -19,11 +19,13 @@ class Manager
     private $bannedDomains = [
         'annomails.com',
         'emailweb.xyz',
+        'buydiscountdeal.com',
+        'palantirmails.com',
     ];
 
     public function __construct($service = null, $spamBlocksManager = null)
     {
-        $this->service = $service ?: new Services\Kickbox;
+        $this->service = $service ?: new Services\TheChecker;
         $this->spamBlocksManager = $spamBlocksManager ?: new SpamBlocks\Manager;
     }
 

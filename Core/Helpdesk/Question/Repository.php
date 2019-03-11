@@ -82,7 +82,8 @@ class Repository
                     ->setQuestion($row['question'])
                     ->setAnswer($row['answer'])
                     ->setCategoryUuid($row['category_uuid'] ? $row['category_uuid']->uuid() : null)
-                    ->setScore($row['score']);
+                    ->setScore($row['score'])
+                    ->setPosition($row['position'] ?: 10);
 
                 $response[] = $question;
             }
@@ -122,7 +123,8 @@ class Repository
                     ->setAnswer($row['answer'])
                     ->setCategoryUuid($row['category_uuid'] ? $row['category_uuid']->uuid() : null)
                     ->setThumbsUp($this->getThumbsFromSet($row['votes_up']))
-                    ->setThumbsDown($this->getThumbsFromSet($row['votes_down']));
+                    ->setThumbsDown($this->getThumbsFromSet($row['votes_down']))
+                    ->setPosition($row['position'] ?: 10);
             }
         } catch (\Exception $e) {
             error_log($e);
@@ -228,13 +230,14 @@ class Repository
         }
         
         $uuid = $entity->getUuid() ?: Core\Util\UUIDGenerator::generate();
-        $query = "INSERT INTO helpdesk_faq (uuid, question, answer, category_uuid) VALUES (?,?,?,?)";
+        $query = "INSERT INTO helpdesk_faq (uuid, question, answer, category_uuid, position) VALUES (?,?,?,?,?)";
 
         $values = [
             new Uuid($uuid),
             $entity->getQuestion(),
             $entity->getAnswer(),
             new Uuid($entity->getCategoryUuid()),
+            (int) $entity->getPosition(),
         ];
 
         $prepared = (new Custom())
@@ -321,7 +324,12 @@ class Repository
                     'category_uuid' => $question->getCategoryUuid(),
                     'question' => $question->getQuestion(),
                     'answer' => $question->getAnswer(),
-                    'suggest' => ['input' => [$question->getQuestion(), $question->getAnswer()]]
+                    'suggest' => [
+                        'input' => array_merge([
+                            $question->getQuestion(),
+                            $question->getAnswer()
+                        ], $this->permutateString($question->getQuestion()))
+                    ], 
                 ]
             ]);
 

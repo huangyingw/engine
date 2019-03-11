@@ -27,6 +27,14 @@ if (!$argv) {
 }
 
 try {
+    $minds = new Minds\Core\Minds();
+    $minds->loadConfigs();
+    $minds->loadLegacy();
+    //loading events will instantiate all of the dependencies which won't be configured yet if we're installing
+    if ($argv[0] !== 'install') {
+        $minds->loadEvents();
+    }
+
     $handler = Minds\Cli\Factory::build($argv);
 
     if (!$handler) {
@@ -36,10 +44,6 @@ try {
         echo "{$_SCRIPTNAME}: `{$argv[0]}` is not a controller" . PHP_EOL;
         exit(1);
     }
-
-    $minds = new Minds\Core\Minds();
-    $minds->loadConfigs();
-    $minds->loadLegacy();
 
     if (method_exists($handler, 'setApp')) {
         $handler->setApp($minds);

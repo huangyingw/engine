@@ -1,20 +1,22 @@
 <?php
 
 /**
- * Minds Media Proxy Download
+ * Minds Media Proxy Download.
  *
  * @author emi
  */
 
 namespace Minds\Core\Media\Proxy;
 
-use Minds\Core\Config\Config;
 use Minds\Core\Di\Di;
 use Minds\Core\Http\Curl\Client;
+use Minds\Traits\MagicAttributes;
 
 class Download
 {
-    /** @var Client $http*/
+    use MagicAttributes;
+
+    /** @var Client $http */
     protected $http;
 
     /** @var array */
@@ -26,6 +28,9 @@ class Download
     /** @var int $timeout */
     protected $timeout = 2;
 
+    /** @var int $limitkb */
+    protected $limitKb;
+
     public function __construct($http = null, $blacklist = null)
     {
         $this->http = $http ?: Di::_()->get('Http');
@@ -33,27 +38,8 @@ class Download
     }
 
     /**
-     * @param string $src
-     * @return Download
-     */
-    public function setSrc($src)
-    {
-        $this->src = $src;
-        return $this;
-    }
-
-    /**
-     * @param int $timeout
-     * @return Download
-     */
-    public function setTimeout($timeout)
-    {
-        $this->timeout = $timeout;
-        return $this;
-    }
-
-    /**
      * Checks if src is a supported URL.
+     *
      * @return bool
      */
     public function isValidSrc()
@@ -73,7 +59,7 @@ class Download
         $url = $matches[2];
 
         //check if internal subnet
-        if (strpos($url, '10.', 0) === 0 
+        if (strpos($url, '10.', 0) === 0
             || strpos($url, '192.168.', 0) === 0
             || strpos($url, '172.16.', 0) === 0
         ) {
@@ -82,7 +68,7 @@ class Download
 
         //check if blacklisted
         foreach ($this->blacklist as $domain) {
-            if (strpos($url, $domain, 0) !== FALSE) {
+            if (strpos($url, $domain, 0) !== false) {
                 return false;
             }
         }
@@ -90,7 +76,7 @@ class Download
         return true;
     }
 
-    public function download()
+    public function downloadBinaryString()
     {
         if (!$this->src || !$this->isValidSrc()) {
             throw new \Exception('Invalid URL');
@@ -105,7 +91,8 @@ class Download
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_CONNECTTIMEOUT_MS => $this->timeout * 1000,
                 CURLOPT_TIMEOUT_MS => $this->timeout * 1000,
-            ]
+            ],
+            'limit' => $this->limitKb ? $this->limitKb : null,
         ]);
 
         if (!$content) {
@@ -120,6 +107,13 @@ class Download
         } elseif (strpos($mime, 'image/') !== 0) {
             throw new \Exception('Content is not an image');
         }
+
+        return $content;
+    }
+
+    public function download()
+    {
+        $content = $this->downloadBinaryString();
 
         $resource = imagecreatefromstring($content);
 

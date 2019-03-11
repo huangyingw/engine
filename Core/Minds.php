@@ -88,6 +88,7 @@ class Minds extends base
         (new Features\FeaturesProvider())->register();
         (new SMS\SMSProvider())->register();
         (new Blockchain\BlockchainProvider())->register();
+        (new Issues\IssuesProvider())->register();
         (new Payments\Subscriptions\SubscriptionsProvider())->register();
         (new Faq\FaqProvider())->register();
         (new Rewards\RewardsProvider())->register();
@@ -105,16 +106,22 @@ class Minds extends base
 
         $this->loadConfigs();
         $this->loadLegacy();
+        $this->loadEvents();
 
         /*
-         * If this is a multisite, then load the specific database settings
-         */
+        * If this is a multisite, then load the specific database settings
+        */
         if ($this->detectMultisite()) {
             new multisite();
         }
+    }
 
+    /*
+    * Load events
+    */
+    public function loadEvents()
+    {
         Events\Defaults::_();
-
         /*
          * Boot the system, @todo this should be oop?
          */

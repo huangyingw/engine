@@ -46,7 +46,8 @@ class questions implements Api, ApiAdminPam
             ->setUuid($uuid)
             ->setQuestion($question)
             ->setAnswer($answer)
-            ->setCategoryUuid($category_uuid);
+            ->setCategoryUuid($category_uuid)
+            ->setPosition($_POST['position'] ?? 10);
 
         /** @var \Minds\Core\Helpdesk\Question\Manager $manager */
         $manager = Di::_()->get('Helpdesk\Question\Manager');
@@ -69,11 +70,11 @@ class questions implements Api, ApiAdminPam
     {
         $question_uuid = null;
 
-        if (!isset($_POST['question_uuid'])) {
+        if (!isset($pages[0])) {
             return Factory::response(['status' => 'error', 'message' => 'question_uuid must be provided']);
         }
-
-        $question_uuid = $_POST['question_uuid'];
+        
+        $question_uuid =  $pages[0];
 
         /** @var \Minds\Core\Helpdesk\Question\Manager $manager */
         $manager = Di::_()->get('Helpdesk\Question\Manager');
