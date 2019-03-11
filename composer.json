@@ -10,7 +10,7 @@
         "firebase/php-jwt": "3.0.*",
         "kramnorth/cinemr-php-sdk": "dev-master@dev",
 	"kickbox/kickbox": "*",
-        "Minds/Surge": "dev-master@dev",
+        "minds/surge": "dev-master@dev",
         "minds/mw3": "dev-master@dev",
         "neoxygen/neoclient": "^3.3",
         "paypal/rest-api-sdk-php": "1.3.2",
