@@ -77,7 +77,11 @@ class feeds implements Interfaces\Api
         $limit = 12;
 
         if (isset($_GET['limit'])) {
-            $limit = intval($_GET['limit']);
+            $limit = abs(intval($_GET['limit']));
+        }
+
+        if ($limit > 5000) {
+            $limit = 5000;
         }
 
         $hashtag = null;
@@ -88,6 +92,13 @@ class feeds implements Interfaces\Api
         $all = false;
         if (!$hashtag && isset($_GET['all']) && $_GET['all']) {
             $all = true;
+        }
+
+        $sync = (bool) ($_GET['sync'] ?? false);
+
+        $query = null;
+        if (isset($_GET['query'])) {
+            $query = $_GET['query'];
         }
 
         $container_guid = $_GET['container_guid'] ?? null;
@@ -104,8 +115,8 @@ class feeds implements Interfaces\Api
             }
         }
 
-        /** @var Core\Feeds\Top\Manager $repo */
-        $repo = Di::_()->get('Feeds\Top\Manager');
+        /** @var Core\Feeds\Top\Manager $manager */
+        $manager = Di::_()->get('Feeds\Top\Manager');
 
         /** @var Core\Feeds\Top\Entities $entities */
         $entities = new Core\Feeds\Top\Entities();
@@ -119,8 +130,13 @@ class feeds implements Interfaces\Api
             'type' => $type,
             'algorithm' => $algorithm,
             'period' => $period,
-            'rating' => $_GET['rating'] ?? 1,
+            'sync' => $sync,
+            'query' => $query ?? null,
+            'rating' => 2,
         ];
+
+        $nsfw = $_GET['nsfw'] ?? '';
+        $opts['nsfw'] = explode(',', $nsfw);
 
         if ($hashtag) {
             $opts['hashtags'] = [$hashtag];
@@ -129,11 +145,11 @@ class feeds implements Interfaces\Api
             $opts['hashtags'] = explode(',', $_GET['hashtags']);
             $opts['filter_hashtags'] = true;
         } elseif (!$all) {
-            /** @var Core\Hashtags\User\Manager $manager */
-            $manager = Di::_()->get('Hashtags\User\Manager');
-            $manager->setUser(Core\Session::getLoggedInUser());
+            /** @var Core\Hashtags\User\Manager $hashtagsManager */
+            $hashtagsManager = Di::_()->get('Hashtags\User\Manager');
+            $hashtagsManager->setUser(Core\Session::getLoggedInUser());
 
-            $result = $manager->get([
+            $result = $hashtagsManager->get([
                 'limit' => 50,
                 'trending' => false,
                 'defaults' => false,
@@ -143,13 +159,20 @@ class feeds implements Interfaces\Api
             $opts['filter_hashtags'] = false;
         }
 
-        $result = $repo->getList($opts);
+        try {
+            $result = $manager->getList($opts);
+        } catch (\Exception $e) {
+            error_log($e);
+            return Factory::response(['status' => 'error', 'message' => $e->getMessage()]);
+        }
 
-        // Remove all unlisted content if it appears
-        $result = array_filter($result, [$entities, 'filter']);
+        if (!$sync) {
+            // Remove all unlisted content if it appears
+            $result = array_filter($result, [$entities, 'filter']);
 
-        // Cast to ephemeral Activity entities, if another type
-        $result = array_map([$entities, 'cast'], $result);
+            // Cast to ephemeral Activity entities, if another type
+            $result = array_map([$entities, 'cast'], $result);
+        }
 
         return Factory::response([
             'status' => 'success',
