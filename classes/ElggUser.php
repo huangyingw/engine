@@ -100,6 +100,9 @@ class ElggUser extends ElggEntity
 	protected function load($guid) {
 
 		foreach($guid as $k => $v){
+            if ($this->isJson($v)) {
+                $v = json_decode($v, true);
+            }
 			$this->attributes[$k] = $v;
 		}
 
@@ -116,7 +119,8 @@ class ElggUser extends ElggEntity
 		}
 
 		if($this->cache && $cached = retrieve_cached_entity($guid)){
-			$this->load($cached);
+            $this->load($cached);
+            $this->guid = $guid;
 			return true;
 		}
 
@@ -152,7 +156,8 @@ class ElggUser extends ElggEntity
 	 *
 	 * @return bool
 	 */
-	public function save() {
+    public function save($timebased = true)
+    {
 			if(!$this->cache){
 					//return false;
 			}
@@ -336,16 +341,21 @@ class ElggUser extends ElggEntity
 	 */
     public function isAdmin() {
 
-        $ip = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null;
+        $config = Minds\Core\Di\Di::_()->get('Config');
 
-        if (!$ip) {
-            return false;
-        }
+        if ($config->get('development_mode') !== true) {
 
-        $whitelist = Minds\Core\Di\Di::_()->get('Config')->get('admin_ip_whitelist');
+            $ip = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null;
 
-        if (!$whitelist || !in_array($ip, $whitelist)) {
-            return false;
+            if (!$ip) {
+                return false;
+            }
+
+            $whitelist = Minds\Core\Di\Di::_()->get('Config')->get('admin_ip_whitelist');
+
+            if (!$whitelist || !in_array($ip, $whitelist)) {
+                return false;
+            }
         }
 
         // for backward compatibility we need to pull this directly
@@ -725,7 +735,8 @@ class ElggUser extends ElggEntity
 			'icontime',
 			'legacy_guid',
             'featured_id',
-            'banned'
+            'banned',
+            'ban_reason',
 		));
 	}
 

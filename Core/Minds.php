@@ -3,6 +3,7 @@
 namespace Minds\Core;
 
 use Minds\Core\Di\Di;
+use Minds\Core\Events\Dispatcher;
 
 /**
  * Core Minds Engine.
@@ -14,11 +15,20 @@ class Minds extends base
     public static $booted = false;
 
     private $modules = [
+        Events\Module::class,
+        SSO\Module::class,
         Email\Module::class,
         Experiments\Module::class,
-        VideoChat\Module::class,
         Helpdesk\Module::class,
+        Onboarding\Module::class,
+        Permissions\Module::class,
         Subscriptions\Module::class,
+        SendWyre\Module::class,
+        Suggestions\Module::class,
+        Referrals\Module::class,
+        Reports\Module::class,
+        VideoChat\Module::class,
+        Front\Module::class,
     ];
 
     /**
@@ -38,6 +48,13 @@ class Minds extends base
         $modules = [];
         foreach ($this->modules as $module) {
             $modules[] = new $module();
+
+            // Submodules han be registered with the ->submodules[] property
+            if (property_exists($module, 'submodules')) {
+                foreach ($modules->submodules as $submodule) {
+                    $modules[] = $submodule;
+                }
+            }
         }
 
         /*
@@ -59,11 +76,11 @@ class Minds extends base
 
         (new \Minds\Entities\EntitiesProvider())->register();
         (new Config\ConfigProvider())->register();
+        (new Router\RouterProvider())->register();
         (new OAuth\OAuthProvider())->register();
         (new Sessions\SessionsProvider())->register();
         (new Boost\BoostProvider())->register();
         (new Data\DataProvider())->register();
-        (new Events\EventsProvider())->register();
         //(new Core\Notification\NotificationProvider())->register();
         (new Pages\PagesProvider())->register();
         (new Payments\PaymentsProvider())->register();
@@ -81,7 +98,6 @@ class Minds extends base
         (new Trending\TrendingProvider())->register();
         (new Media\MediaProvider())->register();
         (new Notification\NotificationProvider())->register();
-        (new Reports\ReportsProvider())->register();
         (new Groups\GroupsProvider())->register();
         (new Search\SearchProvider())->register();
         (new Votes\VotesProvider())->register();
@@ -93,8 +109,12 @@ class Minds extends base
         (new Faq\FaqProvider())->register();
         (new Rewards\RewardsProvider())->register();
         (new Plus\PlusProvider())->register();
+        (new Pro\ProProvider())->register();
         (new Hashtags\HashtagsProvider())->register();
         (new Feeds\FeedsProvider())->register();
+        (new Analytics\AnalyticsProvider())->register();
+        (new Channels\ChannelsProvider())->register();
+        (new Blogs\BlogsProvider())->register();
     }
 
     /**
@@ -125,12 +145,12 @@ class Minds extends base
         /*
          * Boot the system, @todo this should be oop?
          */
-        \elgg_trigger_event('boot', 'system');
+        Dispatcher::trigger('boot', 'elgg/event/system', null, true);
 
         /*
          * Complete the boot process for both engine and plugins
          */
-        elgg_trigger_event('init', 'system');
+        Dispatcher::trigger('init', 'elgg/event/system', null, true);
 
         /*
          * tell the system that we have fully booted
@@ -140,7 +160,7 @@ class Minds extends base
         /*
          * System loaded and ready
          */
-        \elgg_trigger_event('ready', 'system');
+        Dispatcher::trigger('ready', 'elgg/event/system', null, true);
     }
 
     /**
@@ -173,7 +193,7 @@ class Minds extends base
     public function loadLegacy()
     {
         // TODO: Remove when no longer needed
-        $lib_files = array(
+        $lib_files = [
             'elgglib.php',
             'access.php',
             'configuration.php',
@@ -197,7 +217,7 @@ class Minds extends base
             'users.php',
             //'xml.php',
             //'xml-rpc.php'
-        );
+        ];
 
         foreach ($lib_files as $file) {
             $file = __MINDS_ROOT__.$this->legacy_lib_dir.$file;

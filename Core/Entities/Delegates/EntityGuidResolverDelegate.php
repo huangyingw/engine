@@ -34,7 +34,15 @@ class EntityGuidResolverDelegate implements ResolverDelegate
      */
     public function shouldResolve(Urn $urn)
     {
-        return $urn->getNid() === 'entity';
+        return in_array($urn->getNid(), [
+                'entity',
+                'activity',
+                'image',
+                'video',
+                'blog',
+                'user',
+                'group',
+            ], true);
     }
 
     /**
@@ -47,6 +55,10 @@ class EntityGuidResolverDelegate implements ResolverDelegate
         $opts = array_merge([
             'asActivities' => false,
         ], $opts);
+
+        if (!$urns) {
+            return [];
+        }
 
         $guids = array_map(function (Urn $urn) {
             return $urn->getNss();
@@ -67,6 +79,17 @@ class EntityGuidResolverDelegate implements ResolverDelegate
     }
 
     /**
+     * @param $urn
+     * @param mixed $entity
+     * @return mixed
+     */
+    public function map($urn, $entity)
+    {
+        // NOTE: No need to attach URN as GUID fallback defaults to this delegate
+        return $entity;
+    }
+
+    /**
      * @param mixed $entity
      * @return string|null
      */
@@ -74,6 +97,10 @@ class EntityGuidResolverDelegate implements ResolverDelegate
     {
         if (!$entity) {
             return null;
+        }
+
+        if ($entity->getUrn()) {
+            return $entity->getUrn();
         }
 
         if (method_exists($entity, '_magicAttributes') || method_exists($entity, 'getGuid')) {

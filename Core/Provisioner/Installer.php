@@ -1,4 +1,5 @@
 <?php
+
 namespace Minds\Core\Provisioner;
 
 use Minds\Core;
@@ -21,6 +22,7 @@ class Installer
             'domain' => 'http://localhost:8080',
             'username' => 'minds',
             'password' => 'Pa$$w0rd',
+            'development_mode' => true,
             'email' => 'minds@minds.com',
             'email-private-key' => '/.dev/minds.pem',
             'email-public-key' => '/.dev/minds.pub',
@@ -48,6 +50,7 @@ class Installer
             'site-name' => 'Minds',
             'no-https' => false,
             'sns-secret' => '',
+            'checkout_domain' => 'localhost:8081',
         ];
 
         usleep(mt_rand(1, 9999));
@@ -60,12 +63,14 @@ class Installer
     public function setApp($app)
     {
         $this->app = $app;
+
         return $this;
     }
 
     public function setOptions(array $options = [])
     {
         $this->options = array_merge($this->defaults, $options);
+
         return $this;
     }
 
@@ -74,8 +79,9 @@ class Installer
     public function checkOptions()
     {
         $isInstallOnly = isset($this->options['only']);
-        if (!$isInstallOnly || $this->options['only'] === "site"){
+        if (!$isInstallOnly || $this->options['only'] === 'site') {
             $this->checkSiteOptions();
+
             return;
         }
         // TODO: Check all database parameters.
@@ -114,7 +120,7 @@ class Installer
             //throw new ProvisionException('Domain name is invalid');
         }
 
-        if (!isset($this->options['email-private-key']) || !$this->options['email-private-key']) {
+        /*if (!isset($this->options['email-private-key']) || !$this->options['email-private-key']) {
             throw new ProvisionException('Email private key path was not provided');
         } elseif (!is_readable($this->options['email-private-key'])) {
             throw new ProvisionException('Email private key is not readable');
@@ -136,7 +142,7 @@ class Installer
             throw new ProvisionException('Phone number public key path was not provided');
         } elseif (!is_readable($this->options['phone-number-public-key'])) {
             throw new ProvisionException('Phone number public key is not readable');
-        }
+        }*/
 
         if (isset($this->options['site-email']) && !filter_var($this->options['site-email'], FILTER_VALIDATE_EMAIL)) {
             throw new ProvisionException('Site email is invalid');
@@ -155,11 +161,11 @@ class Installer
     public function buildConfig(array $flags = [])
     {
         $flags = array_merge([
-            'returnResult' => false
+            'returnResult' => false,
         ], $flags);
 
-        $source = $this->app->root . DIRECTORY_SEPARATOR . 'settings.example.php';
-        $target = $this->app->root . DIRECTORY_SEPARATOR . 'settings.php';
+        $source = $this->app->root.DIRECTORY_SEPARATOR.'settings.example.php';
+        $target = $this->app->root.DIRECTORY_SEPARATOR.'settings.php';
 
         if (is_file($target) && !isset($this->options['overwrite-settings'])) {
             throw new ProvisionException('Minds is already installed');
@@ -169,7 +175,7 @@ class Installer
 
         // Build options
         if (!isset($this->options['path'])) {
-            $this->options['path'] = dirname($this->app->root) . DIRECTORY_SEPARATOR;
+            $this->options['path'] = dirname($this->app->root).DIRECTORY_SEPARATOR;
         }
 
         if (!isset($this->options['jwt-domain'])) {
@@ -180,11 +186,11 @@ class Installer
         if (!isset($this->options['socket-server-uri'])) {
             $domain = $this->options['domain'];
             $domainParts = parse_url($domain);
-            $this->options['socket-server-uri'] = $domainParts['scheme'] . $domainParts['host'] . ':8010';
+            $this->options['socket-server-uri'] = $domainParts['scheme'].$domainParts['host'].':8010';
         }
 
         if (!isset($this->options['site-name'])) {
-            $this->options['site-name'] = "Minds";
+            $this->options['site-name'] = 'Minds';
         }
 
         if (!isset($this->options['site-email'])) {
@@ -215,31 +221,26 @@ class Installer
 
     public function checkSettingsFile()
     {
-        $target = $this->app->root . DIRECTORY_SEPARATOR . 'settings.php';
+        $target = $this->app->root.DIRECTORY_SEPARATOR.'settings.php';
 
         if (!is_file($target)) {
             throw new ProvisionException('Minds settings file is missing');
         }
     }
 
-    public function setupStorage(Provisioners\ProvisionerInterface $cassandraStorage = null,
-                                 Provisioners\ProvisionerInterface $cockroachProvisioner = null,
-                                 $cleanData = false)
-    {
+    public function setupStorage(
+        Provisioners\ProvisionerInterface $cassandraStorage = null,
+        $cleanData = false
+    ) {
         $this->provisionCassandra($cassandraStorage, $cleanData);
-        $this->provisionCockroach($cockroachProvisioner, $cleanData);
     }
 
-    public function provisionCassandra(Provisioners\ProvisionerInterface $cassandraStorage = null,
-                                       $cleanData = false) {
+    public function provisionCassandra(
+        Provisioners\ProvisionerInterface $cassandraStorage = null,
+        $cleanData = false
+    ) {
         $cassandraStorage = $cassandraStorage ?: new Provisioners\CassandraProvisioner();
         $cassandraStorage->provision($cleanData);
-    }
-
-    public function provisionCockroach(Provisioners\ProvisionerInterface $cockroachProvisioner = null,
-                                       $cleanData = false) {
-        $cockroachProvisioner = $cockroachProvisioner ?: new Provisioners\CockroachProvisioner();
-        $cockroachProvisioner->provision($cleanData);
     }
 
     public function reloadStorage()
@@ -302,7 +303,7 @@ class Installer
             $siteUrl = $config->get('site_url');
         } else {
             $siteUrl = $this->options['no-https'] ? 'http' : 'https';
-            $siteUrl .= '://' . $this->options['domain'] . '/';
+            $siteUrl .= '://'.$this->options['domain'].'/';
         }
 
         return $siteUrl;

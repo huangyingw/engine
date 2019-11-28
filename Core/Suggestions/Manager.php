@@ -1,21 +1,29 @@
 <?php
+
 namespace Minds\Core\Suggestions;
 
-use Minds\Core\EntitiesBuilder;
 use Minds\Common\Repository\Response;
 use Minds\Core\Di\Di;
+use Minds\Core\EntitiesBuilder;
+use Minds\Core\Suggestions\Delegates\CheckRateLimit;
+use Minds\Entities\User;
 
 class Manager
 {
-
     /** @var $repository */
     private $repository;
 
     /** @var EntitiesBuilder $entitiesBuilder */
     private $entitiesBuilder;
 
+    /** @var \Minds\Core\Subscriptions\Manager */
+    private $subscriptionsManager;
+
     /** @var User $user */
     private $user;
+
+    /** @var CheckRateLimit */
+    private $checkRateLimit;
 
     /** @var string $type */
     private $type;
@@ -24,40 +32,49 @@ class Manager
         $repository = null,
         $entitiesBuilder = null,
         $suggestedFeedsManager = null,
-        $subscriptionsManager = null
-    )
-    {
+        $subscriptionsManager = null,
+        $checkRateLimit = null
+    ) {
         $this->repository = $repository ?: new Repository();
         $this->entitiesBuilder = $entitiesBuilder ?: new EntitiesBuilder();
-        $this->suggestedFeedsManager = $suggestedFeedsManager ?: Di::_()->get('Feeds\Suggested\Manager');
+        //$this->suggestedFeedsManager = $suggestedFeedsManager ?: Di::_()->get('Feeds\Suggested\Manager');
         $this->subscriptionsManager = $subscriptionsManager ?: Di::_()->get('Subscriptions\Manager');
+        $this->checkRateLimit = $checkRateLimit ?: new CheckRateLimit();
     }
 
     /**
-     * Set the user to return data for
+     * Set the user to return data for.
+     *
      * @param User $user
+     *
      * @return $this
      */
     public function setUser($user)
     {
         $this->user = $user;
+
         return $this;
     }
 
     /**
-     * Set the type to return data for
+     * Set the type to return data for.
+     *
      * @param string $type
+     *
      * @return $this
      */
     public function setType($type)
     {
         $this->type = $type;
+
         return $this;
     }
 
     /**
-     * Return a list of users
+     * Return a list of users.
+     *
      * @param array $opts
+     *
      * @return Response
      */
     public function getList($opts = [])
@@ -66,6 +83,10 @@ class Manager
             'limit' => 12,
             'paging-token' => '',
         ], $opts);
+
+        if (!$this->checkRateLimit->check($this->user->guid)) {
+            return new Response([]);
+        }
 
         $opts['user_guid'] = $this->user->getGuid();
 
@@ -77,10 +98,21 @@ class Manager
 
         // Hydrate the entities
         // TODO: make this a bulk request vs sequential
-        foreach ($response as $suggestion) {
+        foreach ($response as $k => $suggestion) {
             $entity = $suggestion->getEntity() ?: $this->entitiesBuilder->single($suggestion->getEntityGuid());
+            if (!$entity) {
+                error_log("{$suggestion->getEntityGuid()} suggested user not found");
+                unset($response[$k]);
+                continue;
+            }
+            if ($entity->getDeleted()) {
+                error_log("Deleted entity ".$entity->guid." has been omitted from suggestions t-".time());
+                unset($response[$k]);
+                continue;
+            }
             $suggestion->setEntity($entity);
         }
+
         return $response;
     }
 
@@ -88,7 +120,7 @@ class Manager
     {
         $this->subscriptionsManager->setSubscriber($this->user);
         if ($this->subscriptionsManager->getSubscriptionsCount() > 1) {
-            return new Response;
+            return new Response();
         }
 
         $opts = array_merge([
@@ -97,14 +129,6 @@ class Manager
         ], $opts);
 
         $response = new Response();
-        
-        //$result = $this->suggestedFeedsManager->getFeed($opts);
-
-        //foreach ($result as $user) {
-        //    $suggestion = new Suggestion();
-        //    $suggestion->setEntityGuid($user->guid);
-        //    $response[] = $suggestion;
-        //}
 
         $guids = [
             626772382194872329,
@@ -130,5 +154,4 @@ class Manager
 
         return $response;
     }
-
 }

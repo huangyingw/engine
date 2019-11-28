@@ -7,6 +7,7 @@ namespace Minds\Core\Security;
 use Minds\Core;
 use Minds\Entities;
 use Minds\Core\Security\RateLimits\Manager as RateLimitsManager;
+use Minds\Helpers\Flags;
 
 class ACL
 {
@@ -29,9 +30,16 @@ class ACL
         ACL\Block::_()->listen();
     }
 
+    /**
+     * Override the ACL and return the previous status
+     * @param boolean $ignore
+     * @return boolean
+     */
     public function setIgnore($ignore = false)
     {
+        $previous = self::$ignore;
         self::$ignore = $ignore;
+        return $previous;
     }
 
     /**
@@ -51,7 +59,11 @@ class ACL
             return true;
         }
 
-        // If logged out and public and not container        
+        if (Flags::shouldFail($entity)) {
+            return false;
+        }
+
+        // If logged out and public and not container
         if (!Core\Session::isLoggedIn()) {
             if (
                 (int) $entity->access_id == ACCESS_PUBLIC
@@ -89,7 +101,7 @@ class ACL
          * And check the owner is the container_guid too
          */
         if (
-            in_array($entity->getAccessId(), [ACCESS_LOGGED_IN, ACCESS_PUBLIC])
+            in_array($entity->getAccessId(), [ACCESS_LOGGED_IN, ACCESS_PUBLIC], false)
             && (
                 $entity->owner_guid == $entity->container_guid
                 || $entity->container_guid == 0
@@ -120,7 +132,7 @@ class ACL
         /**
          * Allow plugins to extend the ACL check
          */
-        if (Core\Events\Dispatcher::trigger('acl:read', $entity->getType(), array('entity'=>$entity, 'user'=>$user), false) === true) {
+        if (Core\Events\Dispatcher::trigger('acl:read', $entity->getType(), ['entity'=>$entity, 'user'=>$user], false) === true) {
             return true;
         }
 
@@ -148,9 +160,29 @@ class ACL
         }
 
         /**
-         * Check if we are the owner
+         * If the user is banned or in a limited state
          */
-        if ($entity->owner_guid == $user->guid || $entity->container_guid == $user->guid || $entity->guid == $user->guid) {
+        if ($user->isBanned() || !$user->isEnabled()) {
+            return false;
+        }
+
+        /**
+         * Does the user own the entity, or is it the container?
+         */
+        if ($entity->owner_guid
+            && ($entity->owner_guid == $user->guid)
+            && (
+                !$entity->container_guid // there is no container guid
+                || ($entity->container_guid == $user->guid) // or it is the same as owner
+            )
+        ) {
+            return true;
+        }
+
+        /**
+         * Check if its the same entity (is user)
+         */
+        if ($entity->guid == $user->guid) {
             return true;
         }
 
@@ -164,14 +196,17 @@ class ACL
         /**
          * Allow plugins to extend the ACL check
          */
-        if (Core\Events\Dispatcher::trigger('acl:write', $entity->type, array('entity'=>$entity, 'user'=>$user), false) === true) {
+        if (Core\Events\Dispatcher::trigger('acl:write', $entity->type, ['entity'=>$entity, 'user'=>$user], false) === true) {
             return true;
         }
 
         /**
          * Allow plugins to check if we own the container
          */
-        if ($entity->container_guid && $entity->container_guid != $entity->owner_guid && $entity->container_guid != $entity->guid) {
+        if ($entity->container_guid
+            && $entity->container_guid != $entity->owner_guid
+            && $entity->container_guid != $entity->guid
+        ) {
             if (isset($entity->containerObj) && $entity->containerObj) {
                 $container = Core\Entities::build($entity->containerObj);
             } else {
@@ -208,6 +243,13 @@ class ACL
          * Logged out users can not interact
          */
         if (!$user) {
+            return false;
+        }
+
+        /**
+         * If the user is banned or in a limited state
+         */
+        if ($user->isBanned() || !$user->isEnabled()) {
             return false;
         }
 

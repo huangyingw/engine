@@ -86,7 +86,6 @@ class ThreadNotifications
             if (!$subscribers) {
                 return;
             }
-
         } else {
             // TODO make a magic function here or something smarter (MH)
             $luid = $comment->getLuid();
@@ -96,8 +95,9 @@ class ThreadNotifications
             $parent_path = "0:0:0";
             if ($parent_guids[1] != 0) {
                 $parent_guid = $parent_guids[1];
-                $parent_path = "{$parent_guid[0]}:0:0";
+                $parent_path = $comment->getParentPath();
             }
+
             $luid->setPartitionPath($parent_path);
             $luid->setGuid($parent_guid);
             $parent = $this->entitiesBuilder->single($luid);
@@ -106,16 +106,17 @@ class ThreadNotifications
             }
         }
 
-        $this->eventsDispatcher->trigger('notification', 'all', array(
+        $this->eventsDispatcher->trigger('notification', 'all', [
             'to' => $subscribers,
             'entity' => (string) $comment->getEntityGuid(),
             'description' => (string) $comment->getBody(),
             'params' => [
                 'comment_guid' => (string) $comment->getGuid(),
                 'parent_path' => (string) $comment->getPartitionPath(),
+                'focusedCommentUrn' => $comment->getUrn(),
                 'is_reply' => $comment->getPartitionPath() !== '0:0:0',
             ],
             'notification_view' => 'comment'
-        ));
+        ]);
     }
 }

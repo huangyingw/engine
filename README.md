@@ -7,7 +7,21 @@ Back-end system for Minds. Please run inside of [the Minds repo](https://github.
 ## Documentation
 Documentation for Minds can be found at [minds.org/docs](https://www.minds.org/docs)
 
+
 ## Tasks
+Running CLI jobs. They must be run inside a container.
+
+* run ```docker exec -it minds_php-fpm_1 php '/var/www/Minds/engine/cli.php' controller_name task``
+
+Help files and parameters are available for some tasks.
+
+## Default admin user
+
+Minds ships with a local user ready to roll. 
+* username: minds
+* password: Pa$$w0rd
+
+To enable admin functionality, set 'development_mode' to **true** in your settings.php post installation.
 
 ### Syncing the newsfeed
 
@@ -31,7 +45,7 @@ Please report all security issues to [security@minds.com](mailto:security@minds.
 [AGPLv3](https://www.minds.org/docs/license.html). Please see the license file of each repository.
 
 ## Credits
-[PHP](https://php.net), [Cassandra](http://cassandra.apache.org/), [Angular2](http://angular.io), [Nginx](https://nginx.com), [Ubuntu](https://ubuntu.com), [OpenSSL](https://www.openssl.org/), [RabbitMQ](https://www.rabbitmq.com/), [Elasticsearch](https://www.elastic.co/), [Cordova](https://cordova.apache.org/), [Neo4j](https://neo4j.com/), [Elgg](http://elgg.org), [Node.js](https://nodejs.org/en/), [MongoDB](https://www.mongodb.com/), [Redis](http://redis.io/), [WebRTC](https://webrtc.org/), [Socket.io](http://socket.io/), [TinyMCE](https://www.tinymce.com/), [Ionic](http://ionicframework.com/), [Requirejs](http://requirejs.org/), [OAuth](http://oauth.net/2/), [Apigen](http://www.apigen.org/), [Braintree](https://www.braintreepayments.com/). If any are missing please feel free to add.
+[PHP](https://php.net), [Cassandra](http://cassandra.apache.org/), [Angular2](http://angular.io), [Nginx](https://nginx.com), [Ubuntu](https://ubuntu.com), [OpenSSL](https://www.openssl.org/), [RabbitMQ](https://www.rabbitmq.com/), [Elasticsearch](https://www.elastic.co/), [Cordova](https://cordova.apache.org/), [Neo4j](https://neo4j.com/), [Elgg](http://elgg.org), [Node.js](https://nodejs.org/en/), [MongoDB](https://www.mongodb.com/), [Redis](http://redis.io/), [WebRTC](https://webrtc.org/), [Socket.io](http://socket.io/), [TinyMCE](https://www.tinymce.com/), [Ionic](http://ionicframework.com/), [Requirejs](http://requirejs.org/), [OAuth](http://oauth.net/2/), [Apigen](http://www.apigen.org/)). If any are missing please feel free to add.
 
 ___Copyright Minds 2012 - 2019___
 

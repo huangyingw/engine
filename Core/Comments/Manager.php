@@ -8,6 +8,7 @@
 
 namespace Minds\Core\Comments;
 
+use Minds\Common\Urn;
 use Minds\Core\Di\Di;
 use Minds\Core\EntitiesBuilder;
 use Minds\Core\Luid;
@@ -43,6 +44,9 @@ class Manager
     /** @var EntitiesBuilder */
     protected $entitiesBuilder;
 
+    /** @var Security\Spam */
+    protected $spam;
+
     /**
      * Manager constructor.
      * @param Repository|null $repository
@@ -55,9 +59,9 @@ class Manager
         $threadNotifications = null,
         $createEventDispatcher = null,
         $countCache = null,
-        $entitiesBuilder = null
-    )
-    {
+        $entitiesBuilder = null,
+        $spam = null
+    ) {
         $this->repository = $repository ?: new Repository();
         $this->legacyRepository = $legacyRepository ?: new Legacy\Repository();
         $this->acl = $acl ?: ACL::_();
@@ -65,7 +69,8 @@ class Manager
         $this->threadNotifications = $threadNotifications ?: new Delegates\ThreadNotifications();
         $this->createEventDispatcher = $createEventDispatcher ?: new Delegates\CreateEventDispatcher();
         $this->countCache = $countCache ?: new Delegates\CountCache();
-        $this->entitiesBuilder = $entitiesBuilder  ?: Di::_()->get('EntitiesBuilder');
+        $this->entitiesBuilder = $entitiesBuilder ?: Di::_()->get('EntitiesBuilder');
+        $this->spam = $spam ?: Di::_()->get('Security\Spam');
     }
 
     public function get($entity_guid, $parent_path, $guid)
@@ -81,14 +86,36 @@ class Manager
             'guid' => null,
             'limit' => null,
             'offset' => null,
-            'descending' => true
+            'descending' => true,
+            'is_focused' => false,
         ], $opts);
 
         if ($this->legacyRepository->isLegacy($opts['entity_guid'])) {
             return $this->legacyRepository->getList($opts);
         }
 
-        return $this->repository->getList($opts);
+        $response = $this->repository->getList($opts);
+
+        if ($opts['is_focused'] === true && $opts['offset']) {
+            $count = count($response);
+            $diff = $opts['limit'] - $count;
+            if ($diff <= 0) {
+                return $response; // no need to load anything else
+            }
+            $earlier = $this->repository->getList(array_merge($opts, [
+                'limit' => $diff,
+                'descending' => true,
+                'include_offset' => false,
+            ]));
+            $newResponse = $earlier->reverse();
+            foreach ($response as $comment) {
+                $newResponse[] = $comment;
+            }
+            $newResponse->setPagingToken($response->getPagingToken());
+            return $newResponse;
+        }
+
+        return $response;
     }
 
     /**
@@ -96,7 +123,7 @@ class Manager
      * @param Comment $comment
      * @return bool
      * @throws BlockedUserException
-     * @throws \Exception
+     * @throws \Minds\Exceptions\StopEventException
      */
     public function add(Comment $comment)
     {
@@ -104,9 +131,11 @@ class Manager
 
         $owner = $comment->getOwnerEntity(false);
 
-        if (!$this->acl->interact($entity->guid, $owner, "comment")) {
+        if (!$this->acl->interact($entity, $owner, "comment")) {
             throw new \Exception();
         }
+
+        $this->spam->check($comment);
 
         if (
             !$comment->getOwnerGuid() ||
@@ -144,7 +173,6 @@ class Manager
      * Updates a comment and triggers updating events
      * @param Comment $comment
      * @return bool
-     * @throws \Exception
      */
     public function update(Comment $comment)
     {
@@ -155,17 +183,54 @@ class Manager
         return $this->repository->update($comment, $comment->getDirtyAttributes());
     }
 
+
+    /**
+     * Restores a comment that was deleted from the database
+     * @param Comment $comment
+     * @return bool
+     * @throws BlockedUserException
+     */
+    public function restore(Comment $comment)
+    {
+        $entity = $this->entitiesBuilder->single($comment->getEntityGuid());
+
+        $owner = $comment->getOwnerEntity(false);
+
+        if (
+            !$comment->getOwnerGuid() ||
+            !$this->acl->interact($entity, $owner)
+        ) {
+            throw new BlockedUserException();
+        }
+
+        try {
+            if ($this->legacyRepository->isFallbackEnabled()) {
+                $this->legacyRepository->add($comment, Repository::$allowedEntityAttributes, false);
+            }
+        } catch (\Exception $e) {
+            error_log("[Comments\Repository::restore/legacy] {$e->getMessage()} > " . get_class($e));
+        }
+
+        $success = $this->repository->add($comment);
+
+        if ($success) {
+            $this->countCache->destroy($comment);
+        }
+
+        return $success;
+    }
+
     /**
      * Deletes a comment and triggers deletion events
      * @param Comment $comment
+     * @param array $opts
      * @return bool
-     * @throws \Exception
      */
     public function delete(Comment $comment, $opts = [])
     {
         $opts = array_merge([
-                    'force' => false,
-                ], $opts);
+            'force' => false,
+        ], $opts);
 
         if (!$this->acl->write($comment) && !$opts['force']) {
             return false; //TODO throw exception
@@ -204,6 +269,34 @@ class Manager
         }
 
         return null;
+    }
+
+    /**
+     * @param string|Urn $urn
+     * @return Comment|null
+     * @throws \Exception
+     */
+    public function getByUrn($urn)
+    {
+        if (is_string($urn)) {
+            $urn = new Urn($urn);
+        }
+        $components = explode(':', $urn->getNss());
+
+        if (count($components) !== 5) {
+            error_log("[CommentsManager]: Invalid Comment URN (${$components})");
+            return null;
+        }
+
+        $entityGuid = $components[0];
+        $parentPath = "{$components[1]}:{$components[2]}:{$components[3]}";
+        $guid = $components[4];
+
+        if ($this->legacyRepository->isLegacy($entityGuid)) {
+            return $this->legacyRepository->getByGuid($guid);
+        }
+
+        return $this->repository->get($entityGuid, $parentPath, $guid);
     }
 
     /**

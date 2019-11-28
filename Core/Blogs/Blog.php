@@ -89,6 +89,14 @@ use Minds\Traits\MagicAttributes;
  * @method bool isEphemeral()
  * @method Blog setHidden(bool $value)
  * @method bool isHidden()
+ * @method Blog setModeratorGuid(int $moderatorGuid)
+ * @method int getModeratorGuid()
+ * @method Blog setTimeModerated(int $timeModerated)
+ * @method int getTimeModerated()
+ * @method Blog setAllowComments(bool $allowComments)
+ * @method bool getAllowComments()
+ * @method int getTimeSent()
+ * @method Blog setTimeSent(int $time_sent)
  */
 class Blog extends RepositoryEntity
 {
@@ -219,6 +227,24 @@ class Blog extends RepositoryEntity
 
     protected $_tags = [];
 
+    /** @var array */
+    protected $nsfw = [];
+
+    /** @var array */
+    protected $nsfwLock = [];
+
+    /** @var int */
+    protected $moderatorGuid;
+
+    /** @var int */
+    protected $timeModerated;
+
+    /** @var bool */
+    protected $allowComments = true;
+
+    /** @var int */
+    protected $timeSent;
+
     /**
      * Blog constructor.
      * @param null $eventsDispatcher
@@ -231,12 +257,32 @@ class Blog extends RepositoryEntity
         $config = null,
         $header = null,
         $acl = null
-    )
-    {
+    ) {
         $this->_eventsDispatcher = $eventsDispatcher ?: Di::_()->get('EventsDispatcher');
         $this->_config = $config ?: Di::_()->get('Config');
         $this->_header = $header ?: new Header();
         $this->_acl = $acl ?: ACL::_();
+    }
+
+    /**
+     * @return array
+     */
+    public function __sleep()
+    {
+        return array_diff(array_keys(get_object_vars($this)), [
+            '_eventsDispatcher',
+            '_config',
+            '_header',
+            '_acl',
+        ]);
+    }
+
+    /**
+     * @return void
+     */
+    public function __wakeup()
+    {
+        $this->__construct();
     }
 
     /**
@@ -259,7 +305,7 @@ class Blog extends RepositoryEntity
     {
         if (is_string($value) && $value) {
             $value = json_decode($value, true);
-        } else if ($value instanceof User) {
+        } elseif ($value instanceof User) {
             $value = $value->export();
         }
 
@@ -323,7 +369,8 @@ class Blog extends RepositoryEntity
      * Gets the slug
      * @return string
      */
-    public function getSlug() {
+    public function getSlug()
+    {
         return $this->slug ?: '';
     }
 
@@ -332,7 +379,8 @@ class Blog extends RepositoryEntity
      * @param $text
      * @return $this
      */
-    public function setSlug($text) {
+    public function setSlug($text)
+    {
         $oldSlug = $this->getSlug();
 
         $this->slug = Text::slug($text, 60);
@@ -356,6 +404,8 @@ class Blog extends RepositoryEntity
             'description' => FILTER_SANITIZE_SPECIAL_CHARS,
             'author' => FILTER_SANITIZE_SPECIAL_CHARS
         ]);
+
+        $this->markAsDirty('customMeta');
 
         return $this;
     }
@@ -389,7 +439,7 @@ class Blog extends RepositoryEntity
             return strip_tags($this->excerpt);
         }
 
-        $this->setExcerpt(str_replace("&nbsp;","", $this->getBody()));
+        $this->setExcerpt(str_replace("&nbsp;", "", $this->getBody()));
         return strip_tags($this->excerpt);
     }
 
@@ -419,6 +469,77 @@ class Blog extends RepositoryEntity
     {
         $this->_tags = $value ?: [];
         $this->markAsDirty('tags');
+        return $this;
+    }
+
+    /**
+      * Get NSFW options
+      * @return array
+      */
+    public function getNsfw()
+    {
+        $array = [];
+        if (!$this->nsfw) {
+            return $array;
+        }
+        foreach ($this->nsfw as $reason) {
+            $array[] = (int) $reason;
+        }
+        return $array;
+    }
+
+    /**
+     * Set NSFW tags
+     * @param array $array
+     * @return $this
+     */
+    public function setNsfw($array)
+    {
+        $array = array_unique($array);
+        foreach ($array as $reason) {
+            if ($reason < 1 || $reason > 6) {
+                throw \Exception('Incorrect NSFW value provided');
+            }
+        }
+        $this->nsfw = $array;
+        return $this;
+    }
+    
+    /**
+     * Get NSFW Lock options.
+     *
+     * @return array
+     */
+    public function getNsfwLock()
+    {
+        $array = [];
+        if (!$this->nsfwLock) {
+            return $array;
+        }
+        foreach ($this->nsfwLock as $reason) {
+            $array[] = (int) $reason;
+        }
+
+        return $array;
+    }
+    
+    /**
+     * Set NSFW lock tags for administrators. Users cannot remove these themselves.
+     *
+     * @param array $array
+     *
+     * @return $this
+     */
+    public function setNsfwLock($array)
+    {
+        $array = array_unique($array);
+        foreach ($array as $reason) {
+            if ($reason < 1 || $reason > 6) {
+                throw \Exception('Incorrect NSFW value provided');
+            }
+        }
+        $this->nsfwLock = $array;
+
         return $this;
     }
 
@@ -463,6 +584,10 @@ class Blog extends RepositoryEntity
             'boostRejectionReason',
             'ownerObj',
             'tags',
+            'nsfw',
+            'nsfw_lock',
+            'allow_comments',
+            'time_sent',
             function ($export) {
                 return $this->_extendExport($export);
             }
@@ -487,6 +612,10 @@ class Blog extends RepositoryEntity
         $output['excerpt'] = $this->getExcerpt();
         $output['category'] = $this->getCategories() ? $this->getCategories()[0] : '';
         $output['tags'] = $this->getTags();
+        $output['nsfw'] = $this->getNsfw();
+        $output['nsfw_lock'] = $this->getNsfwLock();
+        $output['allow_comments'] = $this->getAllowComments();
+        $output['time_sent'] = $this->getTimeSent();
         $output['header_bg'] = $export['has_header_bg'];
 
         if (!$this->isEphemeral()) {
@@ -523,11 +652,22 @@ class Blog extends RepositoryEntity
             unset($output['deleted']);
         }
 
+        $output['urn'] = $this->getUrn();
+
         $output = array_merge(
             $output,
             $this->_eventsDispatcher->trigger('export:extender', 'blog', [ 'entity' => $this ], [])
         );
 
         return $output;
+    }
+
+    /**
+     * Return the URN
+     * @return string
+     */
+    public function getUrn()
+    {
+        return "urn:blog:{$this->getGuid()}";
     }
 }

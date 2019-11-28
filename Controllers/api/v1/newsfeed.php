@@ -19,6 +19,7 @@ use Minds\Helpers\Counters;
 use Minds\Interfaces;
 use Minds\Interfaces\Flaggable;
 use Minds\Core\Di\Di;
+use Minds\Core\Entities\Actions\Save;
 
 class newsfeed implements Interfaces\Api
 {
@@ -30,7 +31,7 @@ class newsfeed implements Interfaces\Api
      */
     public function get($pages)
     {
-        $response = array();
+        $response = [];
         $loadNext = '';
 
         if (!isset($pages[0])) {
@@ -53,26 +54,26 @@ class newsfeed implements Interfaces\Api
                     return Factory::response(['status' => 'error']);
                 }
 
-                return Factory::response(array('activity' => $activity->export()));
+                return Factory::response(['activity' => $activity->export()]);
                 break;
             default:
             case 'personal':
-                $options = array(
+                $options = [
                     'owner_guid' => isset($pages[1]) ? $pages[1] : elgg_get_logged_in_user_guid()
-                );
+                ];
                 if (isset($_GET['pinned']) && count($_GET['pinned']) > 0) {
                     $pinned_guids = [];
                     $p = explode(',', $_GET['pinned']);
-                    foreach($p as $guid) {
+                    foreach ($p as $guid) {
                         $pinned_guids[] = (string)$guid;
                     }
                 }
 
                 break;
             case 'network':
-                $options = array(
+                $options = [
                     'network' => isset($pages[1]) ? $pages[1] : core\Session::getLoggedInUserGuid()
-                );
+                ];
                 break;
             case 'top':
                 $offset = isset($_GET['offset']) ? $_GET['offset'] : "";
@@ -101,14 +102,14 @@ class newsfeed implements Interfaces\Api
                 }
                 break;
             case 'container':
-                $options = array(
+                $options = [
                     'container_guid' => isset($pages[1]) ? $pages[1] : elgg_get_logged_in_user_guid()
-                );
+                ];
 
                 if (isset($_GET['pinned']) && count($_GET['pinned']) > 0) {
                     $pinned_guids = [];
                     $p = explode(',', $_GET['pinned']);
-                    foreach($p as $guid) {
+                    foreach ($p as $guid) {
                         $pinned_guids[] = (string) $guid;
                     }
                 }
@@ -158,11 +159,11 @@ class newsfeed implements Interfaces\Api
             Helpers\Campaigns\HourlyRewards::reward();
         }
 
-        $activity = Core\Entities::get(array_merge(array(
+        $activity = Core\Entities::get(array_merge([
             'type' => 'activity',
             'limit' => get_input('limit', 5),
             'offset' => get_input('offset', '')
-        ), $options));
+        ], $options));
         if (get_input('offset') && !get_input('prepend') && $activity) { // don't shift if we're prepending to newsfeed
             array_shift($activity);
         }
@@ -175,7 +176,7 @@ class newsfeed implements Interfaces\Api
             try {
                 $limit = isset($_GET['access_token']) && $_GET['offset'] ? 2 : 1;
                 //$limit = 2;
-                $cacher = Core\Data\cache\factory::build('apcu');
+                $cacher = Core\Data\cache\factory::build('Redis');
                 $offset =  $cacher->get(Core\Session::getLoggedinUser()->guid . ':boost-offset:newsfeed');
 
                 /** @var Core\Boost\Network\Iterator $iterator */
@@ -249,7 +250,6 @@ class newsfeed implements Interfaces\Api
                         $response['pinned'][] = $exported;
                     }
                 }
-
             }
 
             $response['activity'] = factory::exportable($activity, ['boosted', 'boosted_guid'], true);
@@ -263,6 +263,7 @@ class newsfeed implements Interfaces\Api
     public function post($pages)
     {
         Factory::isLoggedIn();
+        $save = new Save();
 
         //factory::authorize();
         switch ($pages[0]) {
@@ -306,6 +307,8 @@ class newsfeed implements Interfaces\Api
                 }*/
 
                 $activity = new Activity();
+                $activity->setNSFW($embeded->getNSFW());
+
                 switch ($embeded->type) {
                     case 'activity':
                         if ($message) {
@@ -313,11 +316,13 @@ class newsfeed implements Interfaces\Api
                         }
 
                         if ($embeded->remind_object) {
-                            $activity->setRemind($embeded->remind_object)->save();
+                            $activity->setRemind($embeded->remind_object);
                             Counters::increment($embeded->remind_object['guid'], 'remind');
                         } else {
-                            $activity->setRemind($embeded->export())->save();
+                            $activity->setRemind($embeded->export());
                         }
+                        $save->setEntity($activity)
+                            ->save();
                         break;
                     default:
                         /**
@@ -332,8 +337,7 @@ class newsfeed implements Interfaces\Api
                                         ->setURL($embeded->getURL())
                                         ->setThumbnail($embeded->getIconUrl())
                                         ->setFromEntity($embeded)
-                                        ->setMessage($message)
-                                        ->save();
+                                        ->setMessage($message);
                                 } else {
                                     $activity->setRemind((new Activity())
                                         ->setTimeCreated($embeded->time_created)
@@ -343,9 +347,10 @@ class newsfeed implements Interfaces\Api
                                         ->setThumbnail($embeded->getIconUrl())
                                         ->setFromEntity($embeded)
                                         ->export())
-                                        ->setMessage($message)
-                                        ->save();
+                                        ->setMessage($message);
                                 }
+                                $save->setEntity($activity)
+                                    ->save();
                                 break;
                             case 'video':
                                 if ($embeded->owner_guid == Core\Session::getLoggedInUserGuid()) {
@@ -353,12 +358,12 @@ class newsfeed implements Interfaces\Api
                                         ->setCustom('video', [
                                             'thumbnail_src' => $embeded->getIconUrl(),
                                             'guid' => $embeded->guid,
-                                            'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false
+                                            'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false,
+                                            'full_hd' => $embeded->getFlag('full_hd') ?? false,
                                         ])
                                         ->setTitle($embeded->title)
                                         ->setBlurb($embeded->description)
-                                        ->setMessage($message)
-                                        ->save();
+                                        ->setMessage($message);
                                 } else {
                                     $activity = new Activity();
                                     $activity->setRemind(
@@ -374,10 +379,11 @@ class newsfeed implements Interfaces\Api
                                             ->setTitle($embeded->title)
                                             ->setBlurb($embeded->description)
                                             ->export()
-                                        )
-                                        ->setMessage($message)
-                                        ->save();
+                                    )
+                                        ->setMessage($message);
                                 }
+                                $save->setEntity($activity)
+                                    ->save();
                                 break;
                             case 'image':
                                 if ($embeded->owner_guid == Core\Session::getLoggedInUserGuid()) {
@@ -387,13 +393,13 @@ class newsfeed implements Interfaces\Api
                                         'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false,
                                         'width' => $embeded->width,
                                         'height' => $embeded->height,
+                                        'gif' => (bool) $embeded->gif ?? false,
                                     ]])
                                         ->setMature($embeded instanceof Flaggable ? $embeded->getFlag('mature') : false)
                                         ->setFromEntity($embeded)
                                         ->setTitle($embeded->title)
                                         ->setBlurb($embeded->description)
-                                        ->setMessage($message)
-                                        ->save();
+                                        ->setMessage($message);
                                 } else {
                                     $activity->setRemind(
                                         (new Activity())
@@ -404,16 +410,18 @@ class newsfeed implements Interfaces\Api
                                                 'mature' => $embeded instanceof Flaggable ? $embeded->getFlag('mature') : false,
                                                 'width' => $embeded->width,
                                                 'height' => $embeded->height,
+                                                'gif' => (bool) $embeded->gif ?? false,
                                             ]])
                                             ->setMature($embeded instanceof Flaggable ? $embeded->getFlag('mature') : false)
                                             ->setFromEntity($embeded)
                                             ->setTitle($embeded->title)
                                             ->setBlurb($embeded->description)
                                             ->export()
-                                        )
-                                        ->setMessage($message)
-                                        ->save();
+                                    )
+                                        ->setMessage($message);
                                 }
+                                $save->setEntity($activity)
+                                    ->save();
                                 break;
                         }
                 }
@@ -445,29 +453,7 @@ class newsfeed implements Interfaces\Api
                     ->setUserGuid(Core\Session::getLoggedInUserGuid())
                     ->follow();
 
-                return Factory::response(array('guid' => $activity->guid));
-                break;
-            case 'pin':
-                if (isset($pages[1])) {
-                    /** @var Activity $activity */
-                    $activity = Entities\Factory::build($pages[1]);
-                    $user = Core\Session::getLoggedinUser();
-                    $user->addPinned($activity->guid);
-                    $user->save();
-
-                    return Factory::response([]);
-                }
-                break;
-            case 'unpin':
-                if (isset($pages[1])) {
-                    /** @var Activity $activity */
-                    $activity = Entities\Factory::build($pages[1]);
-                    $user = Core\Session::getLoggedinUser();
-                    $user->removePinned($activity->guid);
-                    $user->save();
-
-                    return Factory::response([]);
-                }
+                return Factory::response(['guid' => $activity->guid]);
                 break;
 
             default:
@@ -476,17 +462,17 @@ class newsfeed implements Interfaces\Api
                     $activity = new Activity($pages[0]);
 
                     if (!$activity->canEdit() || $activity->type !== 'activity') {
-                        return Factory::response(array('status' => 'error', 'message' => 'Post not editable'));
+                        return Factory::response(['status' => 'error', 'message' => 'Post not editable']);
                     }
 
-                    $allowed = array('message', 'title');
+                    $allowed = ['message', 'title'];
                     foreach ($allowed as $allowed) {
                         if (isset($_POST[$allowed]) && $_POST[$allowed] !== false) {
                             $activity->$allowed = $_POST[$allowed];
                         }
                     }
 
-                    if(isset($_POST['thumbnail'])) {
+                    if (isset($_POST['thumbnail'])) {
                         $activity->setThumbnail($_POST['thumbnail']);
                     }
 
@@ -499,7 +485,7 @@ class newsfeed implements Interfaces\Api
                     }
 
                     if (isset($_POST['nsfw'])) {
-                        $activity->setNsfw($_POST['nsfw']); 
+                        $activity->setNsfw($_POST['nsfw']);
                     }
 
                     $user = Core\Session::getLoggedInUser();
@@ -528,9 +514,26 @@ class newsfeed implements Interfaces\Api
 
                     $activity->indexes = ["activity:$activity->owner_guid:edits"]; //don't re-index on edit
                     (new Core\Translation\Storage())->purge($activity->guid);
-                    $activity->save();
+
+                    if (isset($_POST['time_created']) && ($_POST['time_created'] != $activity->getTimeCreated())) {
+                        try {
+                            $timeCreatedDelegate = new Core\Feeds\Activity\Delegates\TimeCreatedDelegate();
+                            $timeCreatedDelegate->onUpdate($activity, $_POST['time_created'], time());
+                        } catch (\Exception $e) {
+                            return Factory::response([
+                                'status' => 'error',
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+
+                    $save->setEntity($activity)
+                        ->save();
+
+                    (new Core\Entities\PropagateProperties())->from($activity);
+
                     $activity->setExportContext(true);
-                    return Factory::response(array('guid' => $activity->guid, 'activity' => $activity->export(), 'edited' => true));
+                    return Factory::response(['guid' => $activity->guid, 'activity' => $activity->export(), 'edited' => true]);
                 }
 
                 $activity = new Activity();
@@ -538,6 +541,19 @@ class newsfeed implements Interfaces\Api
                 $activity->setMature(isset($_POST['mature']) && !!$_POST['mature']);
 
                 $user = Core\Session::getLoggedInUser();
+
+                if (isset($_POST['time_created'])) {
+                    try {
+                        $timeCreatedDelegate = new Core\Feeds\Activity\Delegates\TimeCreatedDelegate();
+                        $timeCreatedDelegate->onAdd($activity, $_POST['time_created'], time());
+                    } catch (\Exception $e) {
+                        return Factory::response([
+                            'status' => 'error',
+                            'message' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
                 if ($user->isMature()) {
                     $activity->setMature(true);
                 }
@@ -557,7 +573,7 @@ class newsfeed implements Interfaces\Api
                         ->setThumbnail($_POST['thumbnail']);
                 }
 
-                if(isset($_POST['wire_threshold']) && $_POST['wire_threshold']) {
+                if (isset($_POST['wire_threshold']) && $_POST['wire_threshold']) {
                     if (is_array($_POST['wire_threshold']) && ($_POST['wire_threshold']['min'] <= 0 || !$_POST['wire_threshold']['type'])) {
                         return Factory::response([
                             'status' => 'error',
@@ -608,7 +624,9 @@ class newsfeed implements Interfaces\Api
 
                     $attachment->setNsfw($activity->getNsfw());
 
-                    $attachment->save();
+                    $attachment->set('time_created', $activity->getTimeCreated());
+
+                    $save->setEntity($attachment)->save();
 
                     switch ($attachment->subtype) {
                         case "image":
@@ -618,20 +636,20 @@ class newsfeed implements Interfaces\Api
                                 'mature' => $attachment instanceof Flaggable ? $attachment->getFlag('mature') : false,
                                 'width' => $attachment->width,
                                 'height' => $attachment->height,
+                                'gif' => (bool) $attachment->gif ?? false,
                             ]])
                                 ->setFromEntity($attachment)
                                 ->setTitle($attachment->message);
                             break;
                         case "video":
                             $activity->setFromEntity($attachment)
-                                ->setCustom('video', array(
+                                ->setCustom('video', [
                                     'thumbnail_src' => $attachment->getIconUrl(),
                                     'guid' => $attachment->guid,
-                                    'mature' => $attachment instanceof Flaggable ? $attachment->getFlag('mature') : false))
+                                    'mature' => $attachment instanceof Flaggable ? $attachment->getFlag('mature') : false])
                                 ->setTitle($attachment->message);
                             break;
                     }
-
                 }
 
                 $container = null;
@@ -656,7 +674,7 @@ class newsfeed implements Interfaces\Api
 
                     if ($activity->getPending() && $attachment) {
                         $attachment->access_id = 0;
-                        $attachment->save();
+                        $save->setEntity($attachment)->save();
                     }
                 }
 
@@ -668,7 +686,7 @@ class newsfeed implements Interfaces\Api
                 $activity->setNsfw($nsfw);
 
                 try {
-                    $guid = $activity->save();
+                    $guid = $save->setEntity($activity)->save();
                 } catch (\Exception $e) {
                     return Factory::response([
                         'status' => 'error',
@@ -677,25 +695,25 @@ class newsfeed implements Interfaces\Api
                 }
 
                 if ($guid) {
-                    if (in_array($activity->custom_type, ['batch', 'video'])) {
+                    if (in_array($activity->custom_type, ['batch', 'video'], true)) {
                         Helpers\Wallet::createTransaction(Core\Session::getLoggedinUser()->guid, 15, $guid, 'Post');
                     } else {
                         Helpers\Wallet::createTransaction(Core\Session::getLoggedinUser()->guid, 1, $guid, 'Post');
                     }
 
-                    Core\Events\Dispatcher::trigger('social', 'dispatch', array(
+                    Core\Events\Dispatcher::trigger('social', 'dispatch', [
                         'entity' => $activity,
-                        'services' => array(
+                        'services' => [
                             'facebook' => isset($_POST['facebook']) && $_POST['facebook'] ? $_POST['facebook'] : false,
                             'twitter' => isset($_POST['twitter']) && $_POST['twitter'] ? $_POST['twitter'] : false
-                        ),
-                        'data' => array(
+                        ],
+                        'data' => [
                             'message' => rawurldecode($_POST['message']),
                             'perma_url' => isset($_POST['url']) ? rawurldecode($_POST['url']) : $activity->getURL(),
                             'thumbnail_src' => isset($_POST['thumbnail']) ? rawurldecode($_POST['thumbnail']) : null,
                             'description' => isset($_POST['description']) ? rawurldecode($_POST['description']) : null
-                        )
-                    ));
+                        ]
+                    ]);
 
                     // Follow activity
                     (new Core\Notification\PostSubscriptions\Manager())
@@ -719,9 +737,9 @@ class newsfeed implements Interfaces\Api
                     }
 
                     $activity->setExportContext(true);
-                    return Factory::response(array('guid' => $guid, 'activity' => $activity->export()));
+                    return Factory::response(['guid' => $guid, 'activity' => $activity->export()]);
                 } else {
-                    return Factory::response(array('status' => 'failed', 'message' => 'could not save'));
+                    return Factory::response(['status' => 'failed', 'message' => 'could not save']);
                 }
         }
     }
@@ -730,7 +748,7 @@ class newsfeed implements Interfaces\Api
     {
         $activity = new Activity($pages[0]);
         if (!$activity->guid) {
-            return Factory::response(array('status' => 'error', 'message' => 'could not find activity post'));
+            return Factory::response(['status' => 'error', 'message' => 'could not find activity post']);
         }
 
         switch ($pages[1]) {
@@ -762,25 +780,25 @@ class newsfeed implements Interfaces\Api
                 break;
         }
 
-        return Factory::response(array());
+        return Factory::response([]);
     }
 
     public function delete($pages)
     {
         $activity = new Activity($pages[0]);
         if (!$activity->guid) {
-            return Factory::response(array('status' => 'error', 'message' => 'could not find activity post'));
+            return Factory::response(['status' => 'error', 'message' => 'could not find activity post']);
         }
 
         if (!$activity->canEdit()) {
-            return Factory::response(array('status' => 'error', 'message' => 'you don\'t have permission'));
+            return Factory::response(['status' => 'error', 'message' => 'you don\'t have permission']);
         }
         /** @var Entities\User $owner */
         $owner = $activity->getOwnerEntity();
 
         if (
             $activity->entity_guid &&
-            in_array($activity->custom_type, ['batch', 'video'])
+            in_array($activity->custom_type, ['batch', 'video'], true)
         ) {
             // Delete attachment object
             try {
@@ -801,18 +819,17 @@ class newsfeed implements Interfaces\Api
             if ($activity->remind_object && $activity->remind_object['owner_guid'] != Core\Session::getLoggedinUser()->guid) {
                 Helpers\Wallet::createTransaction($activity->remind_object['owner_guid'], -5, $activity->remind_object['guid'], 'Remind Removed');
             } elseif (!$activity->remind_object) {
-                if (in_array($activity->custom_type, ['batch', 'video'])) {
+                if (in_array($activity->custom_type, ['batch', 'video'], true)) {
                     Helpers\Wallet::createTransaction($activity->owner_guid, -15, $activity->guid, 'Post Removed');
                 } else {
                     Helpers\Wallet::createTransaction($activity->owner_guid, -1, $activity->guid, 'Post Removed');
                 }
-
             }
 
-            return Factory::response(array('message' => 'removed ' . $pages[0]));
+            return Factory::response(['message' => 'removed ' . $pages[0]]);
         }
 
-        return Factory::response(array('status' => 'error', 'message' => 'could not delete'));
+        return Factory::response(['status' => 'error', 'message' => 'could not delete']);
     }
 
     /**

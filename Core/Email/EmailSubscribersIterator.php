@@ -105,7 +105,7 @@ class EmailSubscribersIterator implements \Iterator
             'topic' => $this->topic,
             'value' => $this->value,
             'limit' => $this->limit,
-            'offset' => base64_decode($this->offset)
+            'offset' => base64_decode($this->offset, true)
         ];
 
         $result = $this->repository->getList($options);
@@ -125,7 +125,7 @@ class EmailSubscribersIterator implements \Iterator
         $users = $this->builder->get(['guids' => $guids]);
 
         if (!$users) {
-            $this->valid = false;
+            return $this->getSubscribers();
             return;
         }
 

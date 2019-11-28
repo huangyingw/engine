@@ -15,10 +15,10 @@ use Minds\Helpers;
 use Minds\Interfaces;
 use Minds\Core\Events\Dispatcher;
 use Minds\Api\Factory;
+use Minds\Core\Entities\Actions\Save;
 
 class media implements Interfaces\Api, Interfaces\ApiIgnorePam
 {
-
     /**
      * Return the media items
      * @param array $pages
@@ -30,24 +30,32 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
         $response = [];
 
         if (isset($pages[0]) && is_numeric($pages[0])) {
-
             $entity = Di::_()->get('Media\Repository')->getEntity($pages[0]);
 
             if (!$entity || Helpers\Flags::shouldFail($entity)) {
                 return Factory::response(['status' => 'error']);
             }
 
+            if (!in_array($this->getType($entity), ['object:video', 'object:image'], true)) {
+                return Factory::response([
+                    'status' => 'error',
+                    'message' => 'Entity is not a media entity',
+                ]);
+            }
+
             switch ($entity->subtype) {
                 case "video":
-                    Helpers\Counters::increment($pages[0], 'plays');
+                    // Helpers\Counters::increment($pages[0], 'plays');
 
                     if (isset($pages[1]) && $pages[1] == 'play') {
-                        http_response_code(301);
+                        http_response_code(302);
+
+                        $res = !empty($_GET['res']) && in_array($_GET['res'], ['360', '720', '1080'], true) ?$_GET['res'] : '360';
 
                         if ($entity->subtype == 'audio') {
                             \forward($entity->getSourceUrl('128.mp3'));
                         } else {
-                            \forward($entity->getSourceUrl('360.mp4'));
+                            \forward($entity->getSourceUrl("{$res}.mp4"));
                         }
 
                         exit;
@@ -59,8 +67,11 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
                         $response = $entities[0];
                         $response['transcodes'] = [
                             '360.mp4' => $entity->getSourceUrl('360.mp4'),
-                            '720.mp4' =>  $entity->getSourceUrl('720.mp4')
+                            '720.mp4' => $entity->getSourceUrl('720.mp4'),
                         ];
+                        if ($entity->getFlag('full_hd')) {
+                            $response['transcodes']['1080.mp4'] = $entity->getSourceUrl('1080.mp4');
+                        }
                     }
 
                     if (method_exists($entity, 'getWireThreshold')) {
@@ -74,7 +85,7 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
                         Security\ACL::$ignore = $ignore;
                     }
 
-                    /* No break */
+                    /* no break */
                 default:
                     $entity->fullExport = true;
                     $response['entity'] = $entity->export();
@@ -94,7 +105,6 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
                         Security\ACL::$ignore = $ignore;
                     }
                 }
-
         }
 
         return Factory::response($response);
@@ -160,6 +170,7 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
                 $body = $req['body'];
                 fwrite($fp, $body);
                 $video->access_id = 0;
+                $video->patch(['full_hd', Core\Session::getLoggedinUser()->isPro()]);
                 $video->upload($tmpFilename);
                 $guid = $video->save();
                 fclose($fp);
@@ -221,10 +232,11 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
     private function _upload($clientType, array $data = [], array $media = [])
     {
         $user = Core\Session::getLoggedInUser();
+        $save = new Save();
 
         // @note: Sometimes images are uploaded as videos. Polyfill:
         $mimeIsImage = strpos($media['type'], 'image/') !== false;
-        $mimeIsVideo = strpos($media['type'], 'video/') !== false;        
+        $mimeIsVideo = strpos($media['type'], 'video/') !== false;
 
         if ($clientType == 'video') {
             $detectIsImage = @is_array(getimagesize($media['file']));
@@ -239,7 +251,8 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
                 if ($checkIsVideo->validate($media)) {
                     $clientType = 'video';
                 }
-            } catch (\Exception $e){}
+            } catch (\Exception $e) {
+            }
         } elseif ($mimeIsImage) {
             $clientType = 'image';
         } elseif ($mimeIsVideo) {
@@ -258,7 +271,8 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
             'access_id' => 0,
             'owner_guid' => $user->guid,
             'hidden' => $container_guid !== null,
-            'container_guid' => $container_guid
+            'container_guid' => $container_guid,
+            'full_hd' => $user->isPro(),
         ]);
 
         $assets = Core\Media\AssetsFactory::build($entity);
@@ -267,7 +281,10 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
         $entity->setAssets($assets->upload($media, $data));
 
         // Save initial entity
-        $success = $entity->save(true);
+
+        $success =  $save
+            ->setEntity($entity)
+            ->save(true);
 
         if (!$success) {
             throw new \Exception('Error saving media entity');
@@ -330,6 +347,7 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
         }
 
         // Create activity post
+        /** @var Core\Media\Feeds $feeds */
         $feeds = Di::_()->get('Media\Feeds')->setEntity($entity);
 
         if (
@@ -351,5 +369,10 @@ class media implements Interfaces\Api, Interfaces\ApiIgnorePam
         }
 
         return $response;
+    }
+
+    private function getType($entity): string
+    {
+        return $entity->subtype ? "{$entity->type}:{$entity->subtype}" : $entity->type;
     }
 }

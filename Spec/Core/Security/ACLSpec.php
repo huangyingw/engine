@@ -7,14 +7,15 @@ use Prophecy\Argument;
 use Minds\Core;
 use Minds\Entities\User;
 use Minds\Entities\Entity;
-use Minds\Entities\Object;
+use Minds\Entities\MindsObject;
 
 class ACLSpec extends ObjectBehavior
 {
     /** @var Core\Security\RateLimits\Manager */
     private $rateLimits;
 
-    function let(Core\Security\RateLimits\Manager $rateLimits) {
+    public function let(Core\Security\RateLimits\Manager $rateLimits)
+    {
         $this->rateLimits = $rateLimits;
 
         $this->beConstructedWith($rateLimits);
@@ -42,6 +43,7 @@ class ACLSpec extends ObjectBehavior
         $entity->get('access_id')->willReturn(2);
         $entity->get('container_guid')->willReturn(123);
         $entity->get('owner_guid')->willReturn(123);
+        $entity->get('type')->willReturn('activity');
         $this->read($entity)->shouldReturn(true);
     }
 
@@ -49,16 +51,18 @@ class ACLSpec extends ObjectBehavior
     {
         $entity->getType()->willReturn('specy');
         $entity->get('access_id')->willReturn(0);
+        $entity->get('owner_guid')->willReturn(123);
+        $entity->get('type')->willReturn('activity');
         $this->read($entity)->shouldReturn(false);
     }
 
-    public function it_should_trigger_acl_read_event(Object $entity)
+    public function it_should_trigger_acl_read_event(MindsObject $entity)
     {
         $this->mock_session(true);
 
         Core\Events\Dispatcher::register('acl:read', 'all', function ($event) {
-        $event->setResponse(true);
-            });
+            $event->setResponse(true);
+        });
 
         $this->read($entity)->shouldReturn(true);
         $this->mock_session(false);
@@ -83,18 +87,21 @@ class ACLSpec extends ObjectBehavior
 
         $entity->get('owner_guid')
             ->willReturn(123);
+        
+        $entity->get('container_guid')
+            ->willReturn(123);
 
         $this->write($entity)->shouldReturn(true);
         $this->mock_session(false);
     }
 
-    public function it_should_trigger_acl_write_event(Object $entity)
+    public function it_should_trigger_acl_write_event(MindsObject $entity)
     {
         $this->mock_session(true);
 
         Core\Events\Dispatcher::register('acl:write', 'all', function ($event) {
-        $event->setResponse(true);
-      });
+            $event->setResponse(true);
+        });
 
         $this->read($entity)->shouldReturn(true);
         $this->mock_session(false);
@@ -129,7 +136,7 @@ class ACLSpec extends ObjectBehavior
         $this->mock_session(false);
     }
 
-    public function it_should_return_false_on_acl_interact_event(Object $entity)
+    public function it_should_return_false_on_acl_interact_event(MindsObject $entity)
     {
         $this->mock_session(true);
 
@@ -150,8 +157,8 @@ class ACLSpec extends ObjectBehavior
             ->willReturn(false);
 
         Core\Events\Dispatcher::register('acl:interact', 'all', function ($event) {
-        $event->setResponse(false);
-      });
+            $event->setResponse(false);
+        });
 
         $this->interact($entity)->shouldReturn(false);
         $this->mock_session(false);

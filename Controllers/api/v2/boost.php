@@ -17,6 +17,7 @@ use Minds\Entities;
 use Minds\Helpers;
 use Minds\Helpers\Counters;
 use Minds\Interfaces;
+use Minds\Core\Boost\Network;
 
 class boost implements Interfaces\Api
 {
@@ -104,7 +105,7 @@ class boost implements Interfaces\Api
                     $boost_entities[$i]->points = $boost->getBid();
                 }
 
-                $response['boosts'] = factory::exportable($boost_entities, array('points'));
+                $response['boosts'] = factory::exportable($boost_entities, ['points']);
                 $response['load-next'] = $boosts['next'];
                 break;
             case "newsfeed":
@@ -138,22 +139,24 @@ class boost implements Interfaces\Api
         Factory::isLoggedIn();
 
         if (!isset($pages[0])) {
-            return Factory::response(array('status' => 'error', 'message' => ':type must be passed in uri'));
+            return Factory::response(['status' => 'error', 'message' => ':type must be passed in uri']);
         }
 
         if (!isset($pages[1])) {
-            return Factory::response(array('status' => 'error', 'message' => ':guid must be passed in uri'));
+            return Factory::response(['status' => 'error', 'message' => ':guid must be passed in uri']);
         }
 
         $impressions = (int) $_POST['impressions'];
 
         if (!isset($impressions)) {
-            return Factory::response(array('status' => 'error', 'message' => 'impressions must be sent in post body'));
+            return Factory::response(['status' => 'error', 'message' => 'impressions must be sent in post body']);
         }
 
         if ($impressions <= 0) {
-            return Factory::response(array('status' => 'error', 'message' => 'impressions must be a positive whole number'));
+            return Factory::response(['status' => 'error', 'message' => 'impressions must be a positive whole number']);
         }
+
+        $paymentMethod = isset($_POST['paymentMethod']) ? $_POST['paymentMethod'] : [];
 
         $config = array_merge([
             'network' => [
@@ -161,6 +164,10 @@ class boost implements Interfaces\Api
                 'max' => 5000,
             ],
         ], (array)Core\Di\Di::_()->get('Config')->get('boost'));
+
+        if ($paymentMethod['method'] === 'onchain') {
+            $config['network']['max'] *= 2;
+        }
 
         if ($impressions < $config['network']['min'] || $impressions > $config['network']['max']) {
             return Factory::response([
@@ -196,7 +203,6 @@ class boost implements Interfaces\Api
                         $priorityRate = $this->getQueuePriorityRate();
                     }
 
-                    $paymentMethod = isset($_POST['paymentMethod']) ? $_POST['paymentMethod'] : [];
                     $bidType = isset($_POST['bidType']) ? $_POST['bidType'] : null;
                     $categories = isset($_POST['categories']) ? $_POST['categories'] : [];
                     $checksum =  isset($_POST['checksum']) ? $_POST['checksum'] : '';
@@ -206,7 +212,7 @@ class boost implements Interfaces\Api
                         $amount *= $priorityRate + 1;
                     }
 
-                    if (!in_array($bidType, [ 'usd', 'tokens' ])) {
+                    if (!in_array($bidType, [ 'usd', 'tokens' ], true)) {
                         return Factory::response([
                             'status' => 'error',
                             'stage' => 'initial',
@@ -241,7 +247,7 @@ class boost implements Interfaces\Api
                     }
 
                     foreach ($categories as $category) {
-                        if (!in_array($category, $validCategories)) {
+                        if (!in_array($category, $validCategories, true)) {
                             return Factory::response([
                                 'status' => 'error',
                                 'message' => 'Invalid category ID: ' . $category
@@ -269,17 +275,36 @@ class boost implements Interfaces\Api
                         $state = 'pending';
                     }
 
-                    $boost = (new Entities\Boost\Network())
+                    /** @var Network\Manager $manager */
+                    $manager = Di::_()->get('Boost\Network\Manager');
+
+                    $boost = (new Network\Boost())
+                        ->setEntityGuid($entity->getGuid())
                         ->setEntity($entity)
                         ->setBid($amount)
                         ->setBidType($bidType)
                         ->setImpressions($impressions)
+                        ->setOwnerGuid(Core\Session::getLoggedInUser()->getGuid())
                         ->setOwner(Core\Session::getLoggedInUser())
-                        ->setState($state)
-                        ->setHandler(lcfirst($pages[0]))
-                        ->setPriorityRate($priorityRate)
-                        ->setCategories($categories);
+                        ->setCreatedTimestamp(round(microtime(true) * 1000))
+                        ->setType(lcfirst($pages[0]))
+                        ->setPriority(false);
 
+                    if ($manager->checkExisting($boost)) {
+                        return Factory::response([
+                            'status' => 'error',
+                            'message' => "There's already an ongoing boost for this entity"
+                        ]);
+                    }
+                  
+                    if ($manager->isBoostLimitExceededBy($boost)) {
+                        $maxDaily = Di::_()->get('Config')->get('max_daily_boost_views') / 1000;
+                        return Factory::response([
+                            'status' => 'error',
+                            'message' => "Exceeded maximum of ".$maxDaily." offchain tokens per 24 hours."
+                        ]);
+                    }
+                    
                     // Pre-set GUID
 
                     if ($bidType == 'tokens' && isset($_POST['guid'])) {
@@ -293,10 +318,7 @@ class boost implements Interfaces\Api
                             ]);
                         }
 
-                        /** @var Core\Boost\Repository $repository */
-                        $repository = Di::_()->get('Boost\Repository');
-
-                        $existingBoost = $repository->getEntity($boost->getHandler(), $guid);
+                        $existingBoost = $manager->get("urn:boost:{$boost->getType()}:{$guid}");
 
                         if ($existingBoost) {
                             return Factory::response([
@@ -332,15 +354,11 @@ class boost implements Interfaces\Api
                     }
 
                     // Run boost
+    
+                    $boost->setTransactionId($transactionId);
+                    $success = $manager->add($boost);
 
-                    $boostId = Core\Boost\Factory::build(ucfirst($pages[0]))->boost($boost, $impressions);
-
-                    if ($boostId) {
-                        $boost
-                            ->setId((string) $boostId)
-                            ->setTransactionId($transactionId)
-                            ->save();
-                    } else {
+                    if (!$success) {
                         $response['status'] = 'error';
                     }
                     break;

@@ -7,6 +7,7 @@ use Minds\Api\Factory;
 use Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Entities\Factory as EntitiesFactory;
+use Minds\Entities\User;
 use Minds\Interfaces;
 
 class feeds implements Interfaces\Api
@@ -19,6 +20,9 @@ class feeds implements Interfaces\Api
     public function get($pages)
     {
         Factory::isLoggedIn();
+
+        /** @var User $currentUser */
+        $currentUser = Core\Session::getLoggedinUser();
 
         $filter = $pages[0] ?? null;
 
@@ -68,6 +72,14 @@ class feeds implements Interfaces\Api
             $period = '1y';
         }
 
+        //
+
+        $hardLimit = 600;
+
+        if ($currentUser && $currentUser->isAdmin()) {
+            $hardLimit = 5000;
+        }
+
         $offset = 0;
 
         if (isset($_GET['offset'])) {
@@ -80,13 +92,24 @@ class feeds implements Interfaces\Api
             $limit = abs(intval($_GET['limit']));
         }
 
-        if ($limit > 5000) {
-            $limit = 5000;
+        if (($offset + $limit) > $hardLimit) {
+            $limit = $hardLimit - $offset;
         }
+
+        if ($limit <= 0) {
+            return Factory::response([
+                'status' => 'success',
+                'entities' => [],
+                'load-next' => $hardLimit,
+                'overflow' => true,
+            ]);
+        }
+
+        //
 
         $hashtag = null;
         if (isset($_GET['hashtag'])) {
-            $hashtag = $_GET['hashtag'];
+            $hashtag = strtolower($_GET['hashtag']);
         }
 
         $all = false;
@@ -96,10 +119,9 @@ class feeds implements Interfaces\Api
 
         $sync = (bool) ($_GET['sync'] ?? false);
 
-        $query = null;
-        if (isset($_GET['query'])) {
-            $query = $_GET['query'];
-        }
+        $asActivities = (bool) ($_GET['as_activities'] ?? true);
+
+        $query = isset($_GET['query']) ? urldecode($_GET['query']) : null;
 
         $container_guid = $_GET['container_guid'] ?? null;
         $custom_type = isset($_GET['custom_type']) && $_GET['custom_type'] ? [$_GET['custom_type']] : null;
@@ -120,10 +142,12 @@ class feeds implements Interfaces\Api
 
         /** @var Core\Feeds\Top\Entities $entities */
         $entities = new Core\Feeds\Top\Entities();
+        $entities->setActor($currentUser);
 
         $opts = [
             'cache_key' => Core\Session::getLoggedInUserGuid(),
             'container_guid' => $container_guid,
+            'access_id' => 2,
             'custom_type' => $custom_type,
             'limit' => $limit,
             'offset' => $offset,
@@ -132,7 +156,8 @@ class feeds implements Interfaces\Api
             'period' => $period,
             'sync' => $sync,
             'query' => $query ?? null,
-            'rating' => 2,
+            'single_owner_threshold' => 36,
+            'as_activities' => $asActivities,
         ];
 
         $nsfw = $_GET['nsfw'] ?? '';
@@ -161,24 +186,27 @@ class feeds implements Interfaces\Api
 
         try {
             $result = $manager->getList($opts);
+
+            if (!$sync) {
+                // Remove all unlisted content, if ES document is not in sync, it'll
+                // also remove pending activities
+                $result = $result->filter([$entities, 'filter']);
+
+                if ($asActivities) {
+                    // Cast to ephemeral Activity entities, if another type
+                    $result = $result->map([$entities, 'cast']);
+                }
+            }
+
+            return Factory::response([
+                'status' => 'success',
+                'entities' => Exportable::_($result),
+                'load-next' => $limit + $offset,
+            ]);
         } catch (\Exception $e) {
             error_log($e);
             return Factory::response(['status' => 'error', 'message' => $e->getMessage()]);
         }
-
-        if (!$sync) {
-            // Remove all unlisted content if it appears
-            $result = array_filter($result, [$entities, 'filter']);
-
-            // Cast to ephemeral Activity entities, if another type
-            $result = array_map([$entities, 'cast'], $result);
-        }
-
-        return Factory::response([
-            'status' => 'success',
-            'entities' => Exportable::_(array_values($result)),
-            'load-next' => $limit + $offset,
-        ]);
     }
 
     public function post($pages)

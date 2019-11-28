@@ -1,13 +1,15 @@
 <?php
 
-
 namespace Minds\Core\Email\Batches;
 
 use Minds\Core\Email\Campaigns;
 use Minds\Core\Email\EmailSubscribersIterator;
+use Minds\Traits\MagicAttributes;
 
 class Promotion implements EmailBatchInterface
 {
+    use MagicAttributes;
+
     /** @var string $offset */
     protected $offset;
 
@@ -22,42 +24,49 @@ class Promotion implements EmailBatchInterface
 
     /**
      * @param string $offset
+     *
      * @return Promotion
      */
     public function setOffset($offset)
     {
         $this->offset = $offset;
+
         return $this;
     }
 
     /**
      * @param bool $dryRun
+     *
      * @return Promotion
      */
     public function setDryRun($dryRun)
     {
         $this->dryRun = $dryRun;
+
         return $this;
     }
 
     /**
      * @param string $templateKey
+     *
      * @return Promotion
      */
     public function setTemplateKey($templateKey)
     {
         $this->templateKey = $templateKey;
-        return $this;
 
+        return $this;
     }
 
     /**
      * @param string $subject
+     *
      * @return Promotion
      */
     public function setSubject($subject)
     {
         $this->subject = $subject;
+
         return $this;
     }
 
@@ -83,8 +92,14 @@ class Promotion implements EmailBatchInterface
 
         $i = 0;
         foreach ($iterator as $user) {
-            $i++;
-            echo "\n[$i]:$user->guid ";
+            ++$i;
+//            $user = new \Minds\Entities\User('markna');
+//            $user->bounced = false;
+
+            if ($user->bounced) {
+                echo "\n[$i]: $user->guid ($iterator->offset) bounced";
+                continue;
+            }
 
             $campaign = new Campaigns\Promotion();
 
@@ -93,8 +108,9 @@ class Promotion implements EmailBatchInterface
                 ->setTemplateKey($this->templateKey)
                 ->setSubject($this->subject)
                 ->send();
-            
-            echo " (queued)";
+
+            echo "\n[$i]:$user->guid ($iterator->offset)";
+//            exit;
         }
     }
 }

@@ -37,12 +37,14 @@ class settings implements Interfaces\Api
         }
 
 
-        $response = array();
+        $response = [];
 
         $response['channel'] = $user->export();
         $response['channel']['email'] = $user->getEmail();
         $response['channel']['boost_rating'] = $user->getBoostRating();
         $response['channel']['disabled_emails'] = $user->disabled_emails;
+        $response['channel']['toaster_notifications'] = $user->getToasterNotifications();
+
 
         $sessionsManager = Di::_()->get('Sessions\Manager');
         $sessionsManager->setUser($user);
@@ -66,10 +68,6 @@ class settings implements Interfaces\Api
     public function post($pages)
     {
         Factory::isLoggedIn();
-
-        if (!Core\Security\XSRF::validateRequest()) {
-            //return false;
-        }
 
         if (Core\Session::getLoggedInUser()->isAdmin() && isset($pages[0])) {
             $user = new entities\User($pages[0]);
@@ -108,19 +106,18 @@ class settings implements Interfaces\Api
         if (isset($_POST['password']) && $_POST['password']) {
             try {
                 if (!Core\Security\Password::check($user, $_POST['password'])) {
-                    return Factory::response(array(
+                    return Factory::response([
                         'status' => 'error',
                         'message' => 'You current password is incorrect'
-                    ));
+                    ]);
                 }
             } catch (Core\Security\Exceptions\PasswordRequiresHashUpgradeException $e) {
-
             }
 
             try {
                 validate_password($_POST['new_password']);
             } catch (\Exception $e) {
-                $response = array('status'=>'error', 'message'=>$e->getMessage());
+                $response = ['status'=>'error', 'message'=>$e->getMessage()];
 
                 return Factory::response($response);
             }
@@ -136,8 +133,12 @@ class settings implements Interfaces\Api
 
         $allowedLanguages = ['en', 'es', 'fr', 'vi'];
 
-        if (isset($_POST['language']) && in_array($_POST['language'], $allowedLanguages)) {
+        if (isset($_POST['language']) && in_array($_POST['language'], $allowedLanguages, true)) {
             $user->setLanguage($_POST['language']);
+        }
+
+        if (isset($_POST['toaster_notifications'])) {
+            $user->setToasterNotifications((bool) $_POST['toaster_notifications']);
         }
 
         $response = [];
@@ -150,11 +151,11 @@ class settings implements Interfaces\Api
 
     public function put($pages)
     {
-        return Factory::response(array());
+        return Factory::response([]);
     }
 
     public function delete($pages)
     {
-        return Factory::response(array());
+        return Factory::response([]);
     }
 }

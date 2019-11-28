@@ -2,6 +2,8 @@
 
 namespace Minds\Core\Feeds\Top;
 
+use Minds\Common\Repository\Response;
+use Minds\Common\Urn;
 use Minds\Core\Feeds\FeedSyncEntity;
 use Minds\Core\Di\Di;
 use Minds\Core\Search\Search;
@@ -14,14 +16,14 @@ class Manager
     /** @var Repository */
     protected $repository;
 
-    /** @var CachedRepository */
-    protected $cachedRepository;
-
     /** @var Search */
     private $search;
 
     /** @var EntitiesBuilder */
     protected $entitiesBuilder;
+
+    /** @var Entities */
+    protected $entities;
 
     private $from;
 
@@ -34,13 +36,12 @@ class Manager
     public function __construct(
         $repository = null,
         $entitiesBuilder = null,
-        $cachedRepository = null,
+        $entities = null,
         $search = null
-    )
-    {
+    ) {
         $this->repository = $repository ?: new Repository;
         $this->entitiesBuilder = $entitiesBuilder ?: new EntitiesBuilder;
-        $this->cachedRepository = $cachedRepository ?: new CachedRepository;
+        $this->entities = $entities ?: new Entities;
         $this->search = $search ?: Di::_()->get('Search\Search');
 
         $this->from = strtotime('-7 days') * 1000;
@@ -69,7 +70,7 @@ class Manager
 
     /**
      * @param array $opts
-     * @return Entity[]
+     * @return Response
      * @throws \Exception
      */
     public function getList(array $opts = [])
@@ -79,66 +80,137 @@ class Manager
             'cache_key' => null,
             'user_guid' => null,
             'container_guid' => null,
+            'owner_guid' => null,
+            'subscriptions' => null,
+            'access_id' => null,
             'custom_type' => null,
             'offset' => 0,
             'limit' => 12,
-            'rating' => 2,
             'type' => null,
             'sync' => false,
+            'from_timestamp' => null,
             'query' => null,
-            'nsfw' => [ ],
+            'nsfw' => null,
+            'single_owner_threshold' => 36,
+            'filter_hashtags' => false,
+            'pinned_guids' => null,
+            'as_activities' => false,
+            'exclude' => null,
         ], $opts);
 
-        if (isset($opts['query']) && $opts['query'] && in_array($opts['type'], ['user', 'group'])) {
-            return $this->search($opts);
+        if (isset($opts['query']) && $opts['query']) {
+            $opts['query'] = str_replace('#', '', strtolower($opts['query']));
+        }
+
+        if (isset($opts['query']) && $opts['query'] && in_array($opts['type'], ['user', 'group'], true)) {
+            $result = $this->search($opts);
+
+            $response = new Response($result);
+            return $response;
         }
 
         $feedSyncEntities = [];
         $scores = [];
-
-        $this->cachedRepository
-            ->setKey($opts['cache_key']);
+        $owners = [];
+        $i = 0;
 
         foreach ($this->repository->getList($opts) as $scoredGuid) {
             if (!$scoredGuid->getGuid()) {
                 continue;
             }
 
+            $ownerGuid = $scoredGuid->getOwnerGuid() ?: $scoredGuid->getGuid();
+
+            if ($i < $opts['single_owner_threshold']
+                && isset($owners[$ownerGuid])
+                && !$opts['filter_hashtags']
+                && !in_array($opts['type'], [ 'user', 'group' ], true)
+            ) {
+                continue;
+            }
+            $owners[$ownerGuid] = true;
+
+            ++$i; // Update here as we don't want to count skipped
+
+            $entityType = $scoredGuid->getType() ?? 'entity';
+            if (strpos($entityType, 'object:', 0) === 0) {
+                $entityType = str_replace('object:', '', $entityType);
+            }
+
+            if ($opts['as_activities'] && !in_array($opts['type'], [ 'user', 'group' ], true)) {
+                $entityType = 'activity';
+            }
+
+            $urn = implode(':', [
+                'urn',
+                $entityType,
+                $scoredGuid->getGuid(),
+            ]);
+
             $feedSyncEntities[] = (new FeedSyncEntity())
-                ->setGuid($scoredGuid->getGuid())
-                ->setOwnerGuid($scoredGuid->getOwnerGuid());
+                ->setGuid((string) $scoredGuid->getGuid())
+                ->setOwnerGuid((string) $ownerGuid)
+                ->setUrn(new Urn($urn))
+                ->setTimestamp($scoredGuid->getTimestamp());
 
             $scores[(string) $scoredGuid->getGuid()] = $scoredGuid->getScore();
         }
 
         $entities = [];
-        if (count($feedSyncEntities) > 0) {
-            if (!$opts['sync']) {
-                $guids = array_map(function (FeedSyncEntity $feedSyncEntity) {
-                    return $feedSyncEntity->getGuid();
-                }, $feedSyncEntities);
+        $next = '';
 
-                $entities = $this->entitiesBuilder->get(['guids' => $guids]);
-            } else {
-                $entities = $feedSyncEntities;
+        if (count($feedSyncEntities) > 0) {
+            $next = (string) (array_reduce($feedSyncEntities, function ($carry, FeedSyncEntity $feedSyncEntity) {
+                return min($feedSyncEntity->getTimestamp() ?: INF, $carry);
+            }, INF) - 1);
+
+            $hydrateGuids = array_map(function (FeedSyncEntity $feedSyncEntity) {
+                return $feedSyncEntity->getGuid();
+            }, array_slice($feedSyncEntities, 0, 12)); // hydrate the first 12
+
+            $hydratedEntities = $this->entitiesBuilder->get(['guids' => $hydrateGuids]);
+
+            foreach ($hydratedEntities as $entity) {
+                if ($opts['pinned_guids'] && in_array($entity->getGuid(), $opts['pinned_guids'], false)) {
+                    $entity->pinned = true;
+                }
+                if ($opts['as_activities']) {
+                    $entity = $this->entities->cast($entity);
+                }
+                $entities[] = (new FeedSyncEntity)
+                                ->setGuid($entity->getGuid())
+                                ->setOwnerGuid($entity->getOwnerGuid())
+                                ->setUrn($entity->getUrn())
+                                ->setEntity($entity);
             }
 
-            usort($entities, function ($a, $b) use ($scores) {
-                $aGuid = $a instanceof FeedSyncEntity ? $a->getGuid() : $a->guid;
-                $bGuid = $b instanceof FeedSyncEntity ? $b->getGuid() : $b->guid;
+            // TODO: Optimize this
+            foreach (array_slice($feedSyncEntities, 12) as $entity) {
+                $entities[] = $entity;
+            }
 
-                $aScore = $scores[(string) $aGuid];
-                $bScore = $scores[(string) $bGuid];
+            // TODO: confirm if the following is actually necessary
+           // especially after the first 12
 
-                if ($aScore === $bScore) {
-                    return 0;
-                }
+           /*usort($entities, function ($a, $b) use ($scores) {
+               $aGuid = $a instanceof FeedSyncEntity ? $a->getGuid() : $a->guid;
+               $bGuid = $b instanceof FeedSyncEntity ? $b->getGuid() : $b->guid;
 
-                return $aScore < $bScore ? 1 : -1;
-            });
+               $aScore = $scores[(string) $aGuid];
+               $bScore = $scores[(string) $bGuid];
+
+               if ($aScore === $bScore) {
+                   return 0;
+               }
+
+               return $aScore < $bScore ? 1 : -1;
+           });*/
         }
 
-        return $entities;
+        $response = new Response($entities);
+        $response->setPagingToken($next ?: '');
+
+        return $response;
     }
 
     /**
@@ -150,7 +222,7 @@ class Manager
     {
         $feedSyncEntities = [];
 
-        if (!in_array($opts['type'], [ 'user', 'group' ])) {
+        if (!in_array($opts['type'], [ 'user', 'group' ], true)) {
             return [];
         }
 
@@ -158,8 +230,10 @@ class Manager
             $response = $this->search->suggest('user', $opts['query'], $opts['limit']);
             foreach ($response as $row) {
                 $feedSyncEntities[] = (new FeedSyncEntity())
-                    ->setGuid($row['guid'])
-                    ->setOwnerGuid($row['guid']);
+                    ->setGuid((string) $row['guid'])
+                    ->setOwnerGuid((string) $row['guid'])
+                    ->setUrn("urn:user:{$row['guid']}")
+                    ->setTimestamp($row['time_created'] * 1000);
             }
         }
 
@@ -167,20 +241,43 @@ class Manager
             $options = [
                 'text' => $opts['query'],
                 'taxonomies' => 'group',
-                //'mature' => count($opts['nsfw']) > 0,
                 'sort' => 'relevant',
-                'rating' => count($opts['nsfw']) > 0 ? 3 : 2,
             ];
 
             $response = $this->search->query($options, $opts['limit'], $opts['offset']);
             foreach ($response as $row) {
                 $feedSyncEntities[] = (new FeedSyncEntity())
                     ->setGuid($row)
-                    ->setOwnerGuid(-1);
+                    ->setOwnerGuid(-1)
+                    ->setUrn("urn:group:{$row['guid']}")
+                    ->setTimestamp(0);
             }
         }
 
-        return $feedSyncEntities;
+        $entities =  [];
+
+        $hydrateGuids = array_map(function (FeedSyncEntity $feedSyncEntity) {
+            return $feedSyncEntity->getGuid();
+        }, array_slice($feedSyncEntities, 0, 12)); // hydrate the first 12
+
+        if ($hydrateGuids) {
+            $hydratedEntities = $this->entitiesBuilder->get(['guids' => $hydrateGuids]);
+
+            foreach ($hydratedEntities as $entity) {
+                $entities[] = (new FeedSyncEntity)
+                                 ->setGuid($entity->getGuid())
+                                 ->setOwnerGuid($entity->getOwnerGuid())
+                                 ->setUrn($entity->getUrn())
+                                 ->setEntity($entity);
+            }
+        }
+
+        // TODO: Optimize this
+        foreach (array_slice($feedSyncEntities, 12) as $entity) {
+            $entities[] = $entity;
+        }
+
+        return $entities;
     }
 
     public function run($opts = [])
@@ -292,5 +389,4 @@ class Manager
 
         return $aggregates->get();
     }
-
 }

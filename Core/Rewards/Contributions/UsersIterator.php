@@ -42,7 +42,7 @@ class UsersIterator implements \Iterator
     {
         $this->action = $action;
         return $this;
-    }    
+    }
 
     public function setFrom($from)
     {
@@ -113,6 +113,16 @@ class UsersIterator implements \Iterator
             $field = 'user_guid.keyword';
         }
 
+        if ($this->action == 'jury_duty') {
+            $bool['filter'] = [
+                'term' => [
+                    'action' => 'jury_duty'
+                ]
+            ];
+
+            $field = 'user_guid.keyword';
+        }
+
         $query = [
             'index' => 'minds-metrics-*',
             'type' => 'action',
@@ -123,7 +133,7 @@ class UsersIterator implements \Iterator
                 ],
                 'aggs' => [
                     'counts' => [
-                        'terms' => [ 
+                        'terms' => [
                             'field' => $field,
                             'size' => 5000, //5000 * 200 pages = 1,000,000 result
                             'include' => [
@@ -142,21 +152,21 @@ class UsersIterator implements \Iterator
         try {
             $result = $this->client->request($prepared);
         } catch (\Exception $e) {
-            var_dump($e); exit;
+            var_dump($e);
+            exit;
             return false;
         }
         
         foreach ($result['aggregations']['counts']['buckets'] as $count) {
             if ($count['key'] == 0) {
                 continue;
-            } 
+            }
             array_push($this->data, $count['key']);
         }
 
         if ($this->cursor >= count($this->data)) {
             $this->getUsers();
         }
-
     }
 
     /**
@@ -210,4 +220,3 @@ class UsersIterator implements \Iterator
         return $this->valid && isset($this->data[$this->cursor]);
     }
 }
-

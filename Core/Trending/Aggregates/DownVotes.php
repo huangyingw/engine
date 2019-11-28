@@ -8,12 +8,11 @@ use Minds\Core\Data\ElasticSearch;
 
 class DownVotes extends Aggregate
 {
-
     protected $multiplier = -1;
 
     public function get()
     {
-        $filter = [ 
+        $filter = [
             'term' => [
                 'action' => 'vote:down'
             ]
@@ -30,7 +29,7 @@ class DownVotes extends Aggregate
             ]
         ];
         
-        if ($this->type && $this->type != 'group') {
+        if ($this->type && $this->type != 'group' && $this->type != 'user') {
             $must[]['match'] = [
                 'entity_type' => $this->type
             ];
@@ -47,13 +46,17 @@ class DownVotes extends Aggregate
 
         if ($this->type == 'group') {
             $field = 'entity_container_guid';
-            $this->multiplier = 4;
+            //$this->multiplier = 4;
             $must[]['range'] = [
                 'entity_access_id' => [
                   'gte' => 3, //would be group
                   'lt' => null,
                 ]
             ];
+        }
+
+        if ($this->type == 'user') {
+            $field = 'entity_owner_guid';
         }
 
         //$must[]['match'] = [
@@ -73,7 +76,7 @@ class DownVotes extends Aggregate
                 ],
                 'aggs' => [
                     'entities' => [
-                        'terms' => [ 
+                        'terms' => [
                             'field' => "$field.keyword",
                             'size' => $this->limit,
              //               'order' => [ 'uniques' => 'DESC' ],
@@ -101,5 +104,4 @@ class DownVotes extends Aggregate
         }
         return $entities;
     }
-
 }

@@ -1,14 +1,16 @@
 <?php
+
 namespace Minds\Core\Email\Batches;
 
-use Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Core\Security\ACL;
 use Minds\Core\Email\Campaigns;
 use Minds\Core\Email\EmailSubscribersIterator;
+use Minds\Traits\MagicAttributes;
 
 class MissedSinceLogin implements EmailBatchInterface
 {
+    use MagicAttributes;
 
     /** @var Manager */
     protected $manager;
@@ -25,7 +27,7 @@ class MissedSinceLogin implements EmailBatchInterface
 
     /** @var string $subject */
     protected $subject;
-    
+
     public function __construct($manager = null, $trendingRepository = null, $builder = null)
     {
         $this->manager = $manager ?: Di::_()->get('Email\Manager');
@@ -40,32 +42,37 @@ class MissedSinceLogin implements EmailBatchInterface
 
     /**
      * @param string $offset
+     *
      * @return Catchup
      */
     public function setOffset($offset)
     {
         $this->offset = $offset;
+
         return $this;
     }
 
     /**
      * @param string $templatePath
+     *
      * @return Catchup
      */
     public function setTemplateKey($template)
     {
         $this->templatePath = $template;
-        return $this;
 
+        return $this;
     }
 
     /**
      * @param string $subject
+     *
      * @return Catchup
      */
     public function setSubject($subject)
     {
         $this->subject = $subject;
+
         return $this;
     }
 
@@ -75,10 +82,10 @@ class MissedSinceLogin implements EmailBatchInterface
     public function run()
     {
         if (!$this->templatePath || $this->templatePath == '') {
-        //    throw new \Exception('You must set the templatePath');
+            //    throw new \Exception('You must set the templatePath');
         }
         if (!$this->subject || $this->subject == '') {
-        //    throw new \Exception('You must set the subject');
+            //    throw new \Exception('You must set the subject');
         }
 
         $iterator = new EmailSubscribersIterator();
@@ -87,12 +94,12 @@ class MissedSinceLogin implements EmailBatchInterface
             ->setValue(true)
             ->setOffset($this->offset);
 
-        $blogs = $this->getTrendingBlogs();
+        //$blogs = $this->getTrendingBlogs();
 
         $i = 0;
         foreach ($iterator as $user) {
-            $user = new \Minds\Entities\User('ottman');
-            $i++;
+            $user = new \Minds\Entities\User('mark');
+            ++$i;
             echo "\n[$i]: $user->guid ($iterator->offset)";
 
             //if ($user->getTimeCreated() > strtotime('-28 days ago')) {
@@ -100,16 +107,16 @@ class MissedSinceLogin implements EmailBatchInterface
             //    return true;
             //}
 
-            $campaign = new Campaigns\WithBlogs();
+            $campaign = new Campaigns\MissedSinceLogin();
 
             $campaign
                 ->setUser($user)
-                //->setTemplateKey($this->templatePath)
-                //->setSubject($this->subject)
-                ->setBlogs($blogs)
+                ->setTemplateKey($this->templatePath)
+                ->setSubject($this->subject)
+                //->setBlogs($blogs)
                 ->send();
 
-            echo " sent";
+            echo ' sent';
             exit;
         }
     }
@@ -148,5 +155,4 @@ class MissedSinceLogin implements EmailBatchInterface
 
         return $blogs;
     }
-
 }

@@ -8,6 +8,7 @@ namespace Minds\Core\SEO;
 use Minds\Core;
 use Minds\Entities;
 use Minds\Helpers;
+use Minds\Helpers\Counters;
 
 class Defaults
 {
@@ -62,16 +63,7 @@ class Defaults
 
         Manager::add('/crypto', function ($slugs = []) {
             return [
-                'title' => 'The Minds Token',
-                'description' => 'Coming soon',
-                'og:title' => 'The Minds Token',
-                'og:description' => 'Coming soon',
-                'og:url' => '/token',
-                'og:image' => $this->config->cdn_assets_url . 'assets/videos/space-1/space.jpg',
-                'og:image:width' => 2000,
-                'og:image:height' => 1000,
-                'twitter:site' => '@minds',
-                'twitter:card' => 'summary',
+                'og:url' => '/token', // Open graph and twitter redirection
             ];
         });
 
@@ -109,6 +101,10 @@ class Defaults
                     $activity = new Entities\Activity($activity->remind_object);
                 }
 
+                // More than 2 votes allows indexing to search engines (prevents spam)
+
+                $allowIndexing = Counters::get($activity->getGuid(), 'thumbs:up') >= 2;
+
                 $meta = [
                   'title' => $activity->title ?: $activity->message,
                   'description' => $activity->blurb ?: "@{$activity->ownerObj['username']} on {$this->config->site_name}",
@@ -122,7 +118,7 @@ class Defaults
                   'twitter:card' => 'summary',
                   'al:ios:url' => 'minds://activity/' . $activity->guid,
                   'al:android:url' => 'minds://minds/activity/' . $activity->guid,
-                  'robots' => $activity->getRating() == 1 ? 'all' : 'noindex',
+                  'robots' => $allowIndexing ? 'all' : 'noindex',
                 ];
 
                 if ($activity->custom_type == 'video') {
@@ -214,7 +210,7 @@ class Defaults
             $allowedSections = ['top', 'subscriptions', 'subscribers'];
             $meta = [];
 
-            if(array_search($slugs[0], $allowedSections) !== false) {
+            if (array_search($slugs[0], $allowedSections, true) !== false) {
                 $meta = [
                     'og:url' => Core\Di\Di::_()->get('Config')->site_url . implode('/', $slugs),
                     'og:image' => Core\Di\Di::_()->get('Config')->site_url . 'assets/share/master.jpg',
@@ -222,7 +218,7 @@ class Defaults
                     'og:image:height' => 681
                 ];
 
-                switch($slugs[0]){
+                switch ($slugs[0]) {
                     case 'top':
                         $meta = array_merge([
                                 'title' => 'Top Channels',
@@ -332,41 +328,58 @@ class Defaults
             return $meta;
         });
 
+        Manager::add('/analytics', function ($slugs = []) {
+            $meta = [
+                'title' => 'Analytics',
+                'description' => 'Track your traffic, earnings, engagement and trending analytics',
+                'og:title' => 'Analytics',
+                'og:description' => 'Track your traffic, earnings, engagement and trending analytics',
+                'og:url' => sprintf("%sanalytics/%s", $this->config->site_url, implode('/', $slugs)),
+                'og:image' => $this->config->cdn_assets_url . 'assets/photos/network.jpg',
+                'og:image:width' => 2000,
+                'og:image:height' => 1000,
+                'twitter:site' => '@minds',
+                'twitter:card' => 'summary',
+            ];
+
+            return $meta;
+        });
+
+        Manager::add('/wallet/tokens/referrals', function ($slugs = []) {
+            $meta = [
+                'title' => 'Referrals',
+                'description' => 'Share links and track your referrals',
+                'og:title' => 'Referrals',
+                'og:description' => 'Share links and track your referrals',
+                'og:url' => $this->config->site_url . 'wallet/tokens/referrals',
+                'og:image' => $this->config->cdn_assets_url . 'assets/photos/graph.jpg',
+                'og:image:width' => 2000,
+                'og:image:height' => 1000,
+                'twitter:site' => '@minds',
+                'twitter:card' => 'summary',
+            ];
+
+            return $meta;
+        });
+
         $marketing = [
-            'plus' => [
-                'title' => 'Minds Plus',
-                'description' => 'Upgrade your channel for premium features',
-                'image' => 'assets/photos/fractal.jpg'
-            ],
             'wallet' => [
                 'title' => 'Wallet',
                 'description' => 'Manage all of your transactions and earnings on Minds',
                 'image' => 'assets/photos/graph.jpg'
             ],
             'wire' => [
-                'title' => 'Wire',
-                'description' => 'Exchange tokens with other channels on Minds',
-                'image' => 'assets/photos/blown-bulb.jpg'
+                'url' => 'pay'
             ],
             'branding' => [
                 'title' => 'Branding',
                 'description' => 'Logos, assets and styling guides',
                 'image' => 'assets/logos/placeholder.jpg',
             ],
-            'boost' => [
-                'title' => 'Boost',
-                'description' => 'Boost your channel or content to gain more views and reach new audiences',
-                'image' => 'assets/photos/rocket.jpg'
-            ],
             'localization' => [
                 'title' => 'Localization',
                 'description' => 'Help translate Minds into every global language',
                 'image' => 'assets/photos/satellite.jpg'
-            ],
-            'token' => [
-                'title' => 'The Minds Token',
-                'description' => 'Earn crypto for your contributions to the network',
-                'image' => 'assets/photos/globe.jpg'
             ],
             'faq' => [
                 'title' => 'FAQ',
@@ -388,6 +401,61 @@ class Defaults
                 'description' => 'Everything you need to know about Minds Tokens',
                 'image' => 'assets/photos/canyon.jpg',
             ],
+            'content-policy' => [
+                'title' => 'The Jury System',
+                'description' => 'The goal of Minds is to have fair, transparent and ethical moderation practices',
+                'image' => 'assets/photos/canyon.jpg',
+            ],
+            'help' => [
+                'title' => 'Helpdesk',
+                'description' => 'Everything you need to know about Minds',
+                'image' => 'assets/photos/balloon.jpg',
+            ],
+            'mobile' => [
+                'title' => 'Minds Mobile App',
+                'description' => 'Download the Minds mobile app for Android & iOS.',
+                'image' => 'assets/photos/mobile-app.jpg',
+            ],
+            'upgrades' => [
+                'title' => 'Upgrade your Minds experience',
+                'description' => 'Minds offers a unique range of powerful upgrades that will supercharge your Minds experience',
+                'image' => 'assets/marketing/upgrades-1.jpg',
+            ],
+            'plus' => [
+                'title' => 'Minds Plus',
+                'description' => 'Upgrade your channel and unlock premium features',
+                'image' => 'assets/product-pages/plus/plus-1.jpg',
+            ],
+            'pro' => [
+                'title' => 'Minds Pro',
+                'description' => 'The ultimate platform for creators and brands',
+                'image' => 'assets/product-pages/pro/pro-1.jpg',
+            ],
+            'nodes' => [
+                'title' => 'Minds Nodes',
+                'description' => 'Launch your own social networking app',
+                'image' => 'assets/product-pages/nodes/nodes-1.jpg',
+            ],
+            'boost' => [
+                'title' => 'Boost',
+                'description' => 'Expand your reach and gain thousands of views',
+                'image' => 'assets/product-pages/boost/boost-1.jpg',
+            ],
+            'pay' => [
+                'title' => 'Minds Pay',
+                'description' => 'Send and receive payments in USD, BTC, ETH and Tokens',
+                'image' => 'assets/product-pages/pay/pay-1.jpg',
+            ],
+            'rewards' => [
+                'title' => 'Minds Rewards',
+                'description' => 'Earn tokens for your contributions to the network',
+                'image' => 'assets/product-pages/rewards/rewards-1.jpg',
+            ],
+            'token' => [
+                'title' => 'Tokens',
+                'description' => 'The fuel of the Minds network',
+                'image' => 'assets/product-pages/token/token-1.jpg',
+            ],
         ];
 
         foreach ($marketing as $uri => $page) {
@@ -397,7 +465,7 @@ class Defaults
                     'description' => $page['description'],
                     'og:title' => $page['title'],
                     'og:description' => $page['description'],
-                    'og:url' => $this->config->site_url . $uri,
+                    'og:url' => $this->config->site_url . (($page['url'] ?? null) ?: $uri),
                     'og:image' => $this->config->cdn_assets_url . $page['image'],
                     'og:image:width' => 2000,
                     'og:image:height' => 1000,
@@ -409,13 +477,13 @@ class Defaults
         }
     }
 
-    public function channelHandler($slugs = []) 
+    public function channelHandler($slugs = [])
     {
         $username = ($slugs[0] == 'blog') ? $slugs[1]: $slugs[0];
         if (isset($username) && is_string($username)) {
             $user = new Entities\User(strtolower($username));
             if (!$user->guid) {
-                return array();
+                return [];
             }
 
             if (!$user->enabled || $user->banned == 'yes' || Helpers\Flags::shouldFail($user)) {

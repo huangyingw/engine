@@ -24,11 +24,11 @@ class SearchIndexDispatcher implements QueueRunner
 
         $client
             ->setQueue("SearchIndexDispatcher")
-            ->receive(function ($data) {
+            ->receive(function (Queue\Message $message) {
                 /** @var Core\Events\Dispatcher $dispatcher */
                 $dispatcher = Di::_()->get('EventsDispatcher');
 
-                $data = $data->getData();
+                $data = $message->getData();
                 $dispatcher->trigger('search:index:dispatch', 'all', $data);
             });
     }

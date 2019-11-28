@@ -5,23 +5,19 @@
 
 namespace Minds\Core\Email;
 
+use Minds\Core\Di\Di;
 use Minds\Core\Events\Dispatcher;
-use Minds\Interfaces\ModuleInterface;
 use Minds\Core\Analytics\UserStates\UserActivityBuckets;
-use Minds\Core\Email\Campaigns\UserRetention\GoneCold;
+
+use Minds\Core\Email\Campaigns\UserRetention\WelcomeComplete;
+use Minds\Core\Email\Campaigns\UserRetention\WelcomeIncomplete;
 use Minds\Entities\User;
+use Minds\Core\Email\Manager;
+use Minds\Core\Suggestions\Manager as SuggestionManager;
+use Minds\Interfaces\SenderInterface;
 
-class Events implements ModuleInterface
+class Events
 {
-    /**
-     * OnInit.
-     */
-    public function onInit()
-    {
-        $provider = new Provider();
-        $provider->register();
-    }
-
     public function register()
     {
         Dispatcher::register('user_state_change', 'all', function ($opts) {
@@ -30,15 +26,6 @@ class Events implements ModuleInterface
 
         Dispatcher::register('user_state_change', UserActivityBuckets::STATE_CASUAL, function ($opts) {
             error_log('user_state_change casual');
-        });
-
-        Dispatcher::register('user_state_change', UserActivityBuckets::STATE_COLD, function ($opts) {
-            error_log('user_state_change cold');
-            $params = $opts->getParameters();
-            $user = new User($params['user_guid']);
-            $campaign = (new GoneCold())
-                ->setUser($user);
-            $campaign->send();
         });
 
         Dispatcher::register('user_state_change', UserActivityBuckets::STATE_CORE, function ($opts) {
@@ -51,10 +38,25 @@ class Events implements ModuleInterface
 
         Dispatcher::register('user_state_change', UserActivityBuckets::STATE_NEW, function ($opts) {
             error_log('user_state_change new');
+            $this->sendCampaign(new Delegates\WelcomeSender(), $opts->getParameters());
         });
 
         Dispatcher::register('user_state_change', UserActivityBuckets::STATE_RESURRECTED, function ($opts) {
             error_log('user_state_change resurrected');
         });
+
+        Dispatcher::register('user_state_change', UserActivityBuckets::STATE_COLD, function ($opts) {
+            $this->sendCampaign(new Delegates\GoneColdSender(), $opts->getParameters());
+        });
+
+        Dispatcher::register('welcome_email', 'all', function ($opts) {
+            $this->sendCampaign(new Delegates\WelcomeSender(), $opts->getParameters());
+        });
+    }
+
+    private function sendCampaign(SenderInterface $sender, $params)
+    {
+        $user = new User($params['user_guid']);
+        $sender->send($user);
     }
 }

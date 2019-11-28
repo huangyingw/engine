@@ -5,6 +5,7 @@
 namespace Minds\Entities;
 
 use Minds\Core;
+use Minds\Core\Di\Di;
 use Minds\Helpers;
 
 class Image extends File
@@ -19,6 +20,7 @@ class Image extends File
         $this->attributes['rating'] = 2;
         $this->attributes['width'] = 0;
         $this->attributes['height'] = 0;
+        $this->attributes['time_sent'] = null;
     }
 
     public function getUrl()
@@ -33,17 +35,18 @@ class Image extends File
             $size = '';
         }
 
-        if (isset($CONFIG->cdn_url) && !$this->getFlag('paywall') && !$this->getWireThreshold()) {
-            $base_url = $CONFIG->cdn_url;
-        } else {
-            $base_url = \elgg_get_site_url();
-        }
+        // if (isset($CONFIG->cdn_url) && !$this->getFlag('paywall') && !$this->getWireThreshold()) {
+        //     $base_url = $CONFIG->cdn_url;
+        // } else {
+        //     $base_url = \elgg_get_site_url();
+        // }
 
-        if ($this->access_id != 2) {
-            $base_url = \elgg_get_site_url();
-        }
+        // if ($this->access_id != 2) {
+        //     $base_url = \elgg_get_site_url();
+        // }
+        $mediaManager = Di::_()->get('Media\Image\Manager');
 
-        return $base_url. 'api/v1/media/thumbnails/' . $this->guid . '/'.$size;
+        return $mediaManager->getPublicAssetUri($this, $size);
     }
 
     protected function getIndexKeys($ia = false)
@@ -113,10 +116,10 @@ class Image extends File
         return $result;
     }
 
-    public function createThumbnails($sizes = array('small', 'medium','large', 'xlarge'), $filepath = null)
+    public function createThumbnails($sizes = ['small', 'medium','large', 'xlarge'], $filepath = null)
     {
         if (!$sizes) {
-            $sizes = array('small', 'medium','large', 'xlarge');
+            $sizes = ['small', 'medium','large', 'xlarge'];
         }
         $master = $filepath ?: $this->getFilenameOnFilestore();
         foreach ($sizes as $size) {
@@ -150,21 +153,39 @@ class Image extends File
                     $w = 1024;
                     $s = false;
                     $u = true;
+                    break;
                 default:
-                    continue;
+                    continue 2;
             }
-            //@todo - this might not be the smartest way to do this
-            $resized = \get_resized_image_from_existing_file($master, $w, $h, $s, 0, 0, 0, 0, $u);
+
+            /** @var Core\Media\Imagick\Autorotate $autorotate */
+            $autorotate = Core\Di\Di::_()->get('Media\Imagick\Autorotate');
+
+            /** @var Core\Media\Imagick\Resize $resize */
+            $resize = Core\Di\Di::_()->get('Media\Imagick\Resize');
+
+            $image = new \Imagick($master);
+
+            $autorotate->setImage($image);
+            $image = $autorotate->autorotate();
+
+            $resize->setImage($image)
+                ->setUpscale($u)
+                ->setSquare($s)
+                ->setWidth($w)
+                ->setHeight($h)
+                ->resize();
+
             $this->setFilename("image/$this->batch_guid/$this->guid/$size.jpg");
             $this->open('write');
-            $this->write($resized);
+            $this->write($resize->getJpeg(90));
             $this->close();
         }
     }
 
     public function getExportableValues()
     {
-        return array_merge(parent::getExportableValues(), array(
+        return array_merge(parent::getExportableValues(), [
             'thumbnail',
             'cinemr_guid',
             'license',
@@ -174,7 +195,8 @@ class Image extends File
             'width',
             'height',
             'gif',
-        ));
+            'time_sent',
+        ]);
     }
 
     public function getAlbumChildrenGuids()
@@ -194,7 +216,8 @@ class Image extends File
     public function export()
     {
         $export = parent::export();
-        $export['thumbnail_src'] = $this->getIconUrl();
+        $export['thumbnail_src'] = $this->getIconUrl('xlarge');
+        $export['thumbnail'] = $export['thumbnail_src'];
         $export['thumbs:up:count'] = Helpers\Counters::get($this->guid, 'thumbs:up');
         $export['thumbs:down:count'] = Helpers\Counters::get($this->guid, 'thumbs:down');
         $export['description'] = $this->description; //videos need to be able to export html.. sanitize soon!
@@ -203,6 +226,8 @@ class Image extends File
         $export['width'] = $this->width ?: 0;
         $export['height'] = $this->height ?: 0;
         $export['gif'] = (bool) $this->gif;
+        $export['urn'] = $this->getUrn();
+        $export['time_sent'] = $this->getTimeSent();
 
         if (!Helpers\Flags::shouldDiscloseStatus($this) && isset($export['flags']['spam'])) {
             unset($export['flags']['spam']);
@@ -246,6 +271,7 @@ class Image extends File
             'access_id' => null,
             'container_guid' => null,
             'rating' => 2, //open by default
+            'time_sent' => time(),
         ], $data);
 
         $allowed = [
@@ -259,6 +285,7 @@ class Image extends File
             'mature',
             'boost_rejection_reason',
             'rating',
+            'time_sent',
         ];
 
         foreach ($allowed as $field) {
@@ -320,6 +347,7 @@ class Image extends File
                 'width' => $this->width ?? 0,
                 'height' => $this->height ?? 0,
                 'gif' => (bool) ($this->gif ?? false),
+                'license' => $this->license ?? '',
             ]]
         ];
     }
@@ -333,5 +361,29 @@ class Image extends File
     public function getBoostRejectionReason()
     {
         return $this->boost_rejection_reason;
+    }
+
+    public function getUrn()
+    {
+        return "urn:image:{$this->guid}";
+    }
+
+    /**
+     * Return time_sent
+     * @return int
+     */
+    public function getTimeSent()
+    {
+        return $this->time_sent;
+    }
+
+    /**
+     * Set time_sent
+     * @return Image
+     */
+    public function setTimeSent($time_sent)
+    {
+        $this->time_sent = $time_sent;
+        return $this;
     }
 }

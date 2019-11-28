@@ -4,26 +4,38 @@ namespace Spec\Minds\Core\Boost\Network;
 
 use Minds\Core\Boost\Payment;
 use Minds\Core\Boost\Repository;
-use Minds\Core\Data\MongoDB;
+use Minds\Core\Boost\Network\Manager;
+use Minds\Core\Boost\Network\Boost;
 use Minds\Core\Di\Di;
-use Minds\Entities\Boost\Network;
 use PhpSpec\ObjectBehavior;
 use Prophecy\Argument;
+use Minds\Core\Boost\Delegates\OnchainBadgeDelegate;
+use Minds\Entities\User;
 
 class ReviewSpec extends ObjectBehavior
 {
-    function it_is_initializable()
+    private $manager;
+    private $onchainBadge;
+
+    public function let(Manager $manager, OnchainBadgeDelegate $onchainBadge)
+    {
+        $this->beConstructedWith($manager, null, $onchainBadge);
+        $this->manager = $manager;
+        $this->onchainBadge = $onchainBadge;
+    }
+
+    public function it_is_initializable()
     {
         $this->shouldHaveType('Minds\Core\Boost\Network\Review');
     }
 
-    function it_should_throw_an_exception_when_accepting_if_boost_isnt_set(MongoDb\Client $mongo)
+    public function it_should_throw_an_exception_when_accepting_if_boost_isnt_set()
     {
-        $this->beConstructedWith($mongo);
-        $this->shouldThrow(new \Exception('Boost wasn\'t set'))->during('accept');
+        $this->shouldThrow(new \Exception('Boost wasn\'t set'))
+            ->during('accept');
     }
 
-    function it_shouldnt_accept_a_boost_if_payment_failed(MongoDb\Client $mongo, Payment $payment, Network $boost)
+    public function it_shouldnt_accept_a_boost_if_payment_failed(Payment $payment, Boost $boost)
     {
         Di::_()->bind('Boost\Payment', function ($di) use ($payment) {
             return $payment->getWrappedObject();
@@ -33,18 +45,18 @@ class ReviewSpec extends ObjectBehavior
             ->shouldBeCalled()
             ->willReturn(false);
 
-
-        $mongo->update('boost', Argument::any(), Argument::any())
+        $this->manager->update($boost)
             ->shouldNotBeCalled();
 
-        $this->beConstructedWith($mongo);
-
         $this->setBoost($boost);
-        $this->shouldThrow(new \Exception('error while accepting the boost'))->during('accept');
+        $this->shouldThrow(new \Exception('error while accepting the boost'))
+            ->during('accept');
     }
 
-    function it_should_accept_a_boost(MongoDb\Client $mongo, Payment $payment, Network $boost)
+    public function it_should_accept_a_boost(Payment $payment, Boost $boost, User $user)
     {
+        $boost->setOwner($user);
+        
         Di::_()->bind('Boost\Payment', function ($di) use ($payment) {
             return $payment->getWrappedObject();
         });
@@ -53,27 +65,85 @@ class ReviewSpec extends ObjectBehavior
             ->shouldBeCalled()
             ->willReturn(true);
 
-
-        $mongo->update('boost', Argument::any(), Argument::any())
+        $this->manager->update($boost)
             ->shouldBeCalled()
             ->willReturn(true);
 
-        $this->beConstructedWith($mongo);
-
         $this->setBoost($boost);
         $this->accept();
-        $boost->save()->shouldHaveBeenCalled();
     }
 
 
-    function it_should_throw_an_exception_when_rejecting_if_boost_isnt_set(MongoDb\Client $mongo)
+    public function it_should_accept_an_onchain_boost_and_call_onchain_badge_delegate(Payment $payment, Boost $boost)
     {
-        $this->beConstructedWith($mongo);
-        $this->shouldThrow(new \Exception('Boost wasn\'t set'))->during('reject', [1]);
+        $boost->isOnChain()
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $boost->setReviewedTimestamp(Argument::approximate(time() * 1000, -4))
+            ->shouldBeCalled()
+            ->willReturn(true);
+            
+        $this->setBoost($boost);
+  
+        Di::_()->bind('Boost\Payment', function ($di) use ($payment) {
+            return $payment->getWrappedObject();
+        });
+        
+        $payment->charge(Argument::any())
+            ->shouldBeCalled()
+            ->willReturn(true);
+        
+        $this->onchainBadge->dispatch($boost)
+            ->shouldBeCalled()
+            ->willReturn(true);
+            
+        $this->manager->update($boost)
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->accept();
+    }
+
+    public function it_should_accept_an_offchain_boost_and_not_call_onchain_badge_delegate(Payment $payment, Boost $boost, User $user)
+    {
+        $boost->isOnChain()
+            ->shouldBeCalled()
+            ->willReturn(false);
+
+        $boost->setReviewedTimestamp(Argument::approximate(time() * 1000, -4))
+            ->shouldBeCalled()
+            ->willReturn(true);
+            
+        $this->setBoost($boost);
+  
+        Di::_()->bind('Boost\Payment', function ($di) use ($payment) {
+            return $payment->getWrappedObject();
+        });
+        
+        $payment->charge(Argument::any())
+            ->shouldBeCalled()
+            ->willReturn(true);
+        
+        $this->onchainBadge->dispatch($boost)
+            ->shouldNotBeCalled()
+            ->willReturn(true);
+            
+        $this->manager->update($boost)
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->accept();
+    }
+
+    public function it_should_throw_an_exception_when_rejecting_if_boost_isnt_set()
+    {
+        $this->shouldThrow(new \Exception('Boost wasn\'t set'))
+            ->during('reject', [1]);
     }
 
 
-    function it_should_reject_a_boost(MongoDb\Client $mongo, Payment $payment, Network $boost)
+    public function it_should_reject_a_boost(Payment $payment, Boost $boost)
     {
         Di::_()->bind('Boost\Payment', function ($di) use ($payment) {
             return $payment->getWrappedObject();
@@ -82,80 +152,64 @@ class ReviewSpec extends ObjectBehavior
         $payment->refund(Argument::any())
             ->shouldBeCalled();
 
-
-        $mongo->remove('boost', Argument::any())
+        $this->manager->update($boost)
             ->shouldBeCalled()
             ->willReturn(true);
 
-        $boost->getId()
-            ->willReturn('1');
         $owner = new \stdClass();
         $owner->guid = '123';
         $boost->getOwner()
             ->willReturn($owner);
-        $boost->setState(Argument::containingString('rejected'))
-            ->willReturn($boost);
-        $boost->setRejectionReason(Argument::any())
+        $boost->setReviewedTimestamp(Argument::any())
+            ->shouldBeCalled();
+        $boost->setRejectedTimestamp(Argument::any())
+            ->shouldBeCalled();
+        $boost->setRejectedReason(3)
             ->shouldBeCalled()
             ->willReturn($boost);
-        $boost->getRejectionReason()
+        $boost->getRejectedReason()
             ->willReturn(3);
-        $boost->save()
-            ->shouldBeCalled()
-            ->willReturn();
 
         $entity = new \stdClass();
         $entity->title = 'title';
         $boost->getEntity()
             ->willReturn($entity);
-
-        $this->beConstructedWith($mongo);
 
         $this->setBoost($boost);
         $this->reject(3);
-        $boost->save()->shouldHaveBeenCalled();
     }
 
-    function it_should_throw_an_exception_when_revoking_if_boost_isnt_set(MongoDb\Client $mongo)
+    public function it_should_throw_an_exception_when_revoking_if_boost_isnt_set()
     {
-        $this->beConstructedWith($mongo);
-        $this->shouldThrow(new \Exception('Boost wasn\'t set'))->during('revoke');
+        $this->shouldThrow(new \Exception('Boost wasn\'t set'))
+            ->during('revoke');
     }
 
-    function it_should_revoke_a_boost(MongoDb\Client $mongo, Network $boost)
+    public function it_should_revoke_a_boost(Boost $boost)
     {
-        $mongo->remove('boost', Argument::any())
+        $this->manager->update($boost)
             ->shouldBeCalled()
             ->willReturn(true);
 
-        $boost->getId()
-            ->willReturn('1');
         $owner = new \stdClass();
         $owner->guid = '123';
         $boost->getOwner()
             ->willReturn($owner);
 
-        $boost->setState(Argument::containingString('revoked'))
+        $boost->setRevokedTimestamp(Argument::approximate(time() * 1000, -4))
             ->shouldBeCalled()
             ->willReturn($boost);
-
-        $boost->save()
-            ->shouldBeCalled()
-            ->willReturn();
 
         $entity = new \stdClass();
         $entity->title = 'title';
         $boost->getEntity()
             ->willReturn($entity);
 
-        $this->beConstructedWith($mongo);
-
         $this->setBoost($boost);
         $this->revoke();
-        $boost->save()->shouldHaveBeenCalled();
     }
 
-    function it_should_get_the_boost_outbox(MongoDB\Client $mongo, Repository $repository)
+    public function it_should_get_the_boost_outbox(Repository $repository)
     {
         $boosts = [
             [
@@ -169,7 +223,7 @@ class ReviewSpec extends ObjectBehavior
         Di::_()->bind('Boost\Repository', function ($di) use ($repository) {
             return $repository->getWrappedObject();
         });
-
+        
         $repository->getAll('newsfeed', Argument::is([
             'owner_guid' => '123',
             'limit' => 12,
@@ -179,8 +233,6 @@ class ReviewSpec extends ObjectBehavior
             ->shouldBeCalled()
             ->willReturn($boosts);
 
-
-        $this->beConstructedWith($mongo);
         $this->setType('newsfeed');
 
         $this->getOutbox('123', 12, '456')->shouldReturn($boosts);

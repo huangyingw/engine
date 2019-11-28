@@ -32,6 +32,9 @@ class ObjectBlogMapping extends EntityMapping implements MappingInterface
         'tags' => [ 'type' => 'text' ],
         'license' => [ 'type' => 'text', '$exportGetter' => 'getLicense' ],
         'rating' => [ 'type' => 'integer', '$exportField' => 'rating' ],
+        'nsfw' => [ 'type' => 'array', '$exportGetter' => 'getNsfw' ],
+        'moderator_guid' => [ 'type' => 'text' ],
+        '@moderated' => [ 'type' => 'date' ],
     ];
 
     /** @var Blog $entity */
@@ -157,8 +160,14 @@ class ObjectBlogMapping extends EntityMapping implements MappingInterface
 
         $map['rating'] = (int) $this->entity->getRating();
 
-        //
+        if ($this->entity->getModeratorGuid()) {
+            $map['moderator_guid'] = $this->entity->getModeratorGuid();
+        }
+        if ($this->entity->getTimeModerated()) {
+            $map['@moderated'] = $this->entity->getTimeModerated() * 1000;
+        }
 
+        //
         return $map;
     }
 

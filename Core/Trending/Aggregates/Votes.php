@@ -8,7 +8,6 @@ use Minds\Core\Data\ElasticSearch;
 
 class Votes extends Aggregate
 {
-
     protected $multiplier = 1;
 
     private $page = -1;
@@ -16,7 +15,7 @@ class Votes extends Aggregate
 
     public function fetch()
     {
-        $filter = [ 
+        $filter = [
             'term' => [
                 'action' => 'vote:up'
             ]
@@ -33,7 +32,7 @@ class Votes extends Aggregate
             ]
         ];
         
-        if ($this->type && $this->type != 'group') {
+        if ($this->type && $this->type != 'group' && $this->type != 'user') {
             $must[]['match'] = [
                 'entity_type' => $this->type
             ];
@@ -56,8 +55,12 @@ class Votes extends Aggregate
                 'entity_access_id' => [
                   'gte' => 3, //would be group
                   'lt' => null,
-                ]
+                ],
             ];
+        }
+
+        if ($this->type === 'user') {
+            $field = 'entity_owner_guid';
         }
 
         //$must[]['match'] = [
@@ -77,7 +80,7 @@ class Votes extends Aggregate
                 ],
                 'aggs' => [
                     'entities' => [
-                        'terms' => [ 
+                        'terms' => [
                             'field' => "$field.keyword",
                             'size' => $this->limit,
                             'include' => [
@@ -114,5 +117,4 @@ class Votes extends Aggregate
             }
         }
     }
-
 }

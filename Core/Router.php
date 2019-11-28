@@ -2,12 +2,12 @@
 
 namespace Minds\Core;
 
-use Minds\Core\I18n\I18n;
-use Minds\Helpers;
 use Minds\Core\Di\Di;
-use Zend\Diactoros\ServerRequestFactory;
-use Zend\Diactoros\Response;
+use Minds\Core\I18n\I18n;
+use Minds\Core\Router\Manager;
+use Minds\Helpers;
 use Zend\Diactoros\Response\JsonResponse;
+use Zend\Diactoros\ServerRequestFactory;
 
 /**
  * Minds Core Router.
@@ -15,12 +15,12 @@ use Zend\Diactoros\Response\JsonResponse;
 class Router
 {
     // these are core pages, other pages are registered by plugins
-    public static $routes = array(
+    public static $routes = [
       '/archive/thumbnail' => 'Minds\\Controllers\\fs\\v1\\thumbnail',
       '/api/v1/archive/thumbnails' => 'Minds\\Controllers\\api\\v1\\media\\thumbnails',
 
       '/oauth2/token' => 'Minds\\Controllers\\oauth2\\token',
-
+      '/oauth2/implicit' => 'Minds\\Controllers\\oauth2\\implicit',
       '/icon' => 'Minds\\Controllers\\icon',
       '//icon' => 'Minds\\Controllers\\icon',
       '/api' => 'Minds\\Controllers\\api\\api',
@@ -31,10 +31,24 @@ class Router
         //  "/app" => "minds\\pages\\app",
       '/emails/unsubscribe' => 'Minds\\Controllers\\emails\\unsubscribe',
       '/sitemap' => 'Minds\\Controllers\\sitemap',
-
       '/apple-app-site-association' => '\\Minds\\Controllers\\deeplinks',
       '/sitemaps' => '\\Minds\\Controllers\\sitemaps',
-    );
+      '/checkout' => '\\Minds\\Controllers\\checkout',
+    ];
+
+    /** @var Manager */
+    protected $manager;
+
+    /**
+     * Router constructor.
+     * @param Manager $manager
+     */
+    public function __construct(
+        $manager = null
+    ) {
+        /** @var Router\Manager $manager */
+        $this->manager = $manager ?: Di::_()->get('Router\Manager');
+    }
 
     /**
      * Route the pages
@@ -70,6 +84,23 @@ class Router
         $request = ServerRequestFactory::fromGlobals();
         $response = new JsonResponse([]);
 
+        $result = $this->manager
+            ->handle($request, $response);
+
+        if ($result === false) {
+            return null;
+        }
+
+        if ($request->getMethod() === 'OPTIONS') {
+            header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+            header('Access-Control-Allow-Credentials: true');
+            header('Access-Control-Max-Age: 86400');
+            header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+            header('Access-Control-Allow-Headers: Accept,Authorization,Cache-Control,Content-Type,DNT,If-Modified-Since,Keep-Alive,Origin,User-Agent,X-Mx-ReqToken,X-Requested-With,X-No-Cache');
+
+            return null;
+        }
+
         // Sessions
         // TODO: Support middleware
         $session = Di::_()->get('Sessions\Manager');
@@ -85,8 +116,6 @@ class Router
         // XSRF Cookie - may be able to remove now with OAuth flow
         Security\XSRF::setCookie();
 
-        new SEO\Defaults(Di::_()->get('Config'));
-
         if (Session::isLoggedin()) {
             Helpers\Analytics::increment('active');
         }
@@ -99,9 +128,9 @@ class Router
         Di::_()->get('Email\RouterHooks')
             ->withRouterRequest($request);
 
-        if (isset($_GET['referrer'])) {
-            Helpers\Campaigns\Referrals::register($_GET['referrer']);
-        }
+        Di::_()->get('Referrals\Cookie')
+            ->withRouterRequest($request)
+            ->create();
 
         $loop = count($segments);
         while ($loop >= 0) {
@@ -114,7 +143,7 @@ class Router
 
             if (isset(self::$routes[$route])) {
                 $handler = new self::$routes[$route]();
-                $pages = array_splice($segments, $loop) ?: array();
+                $pages = array_splice($segments, $loop) ?: [];
                 if (method_exists($handler, $method)) {
                     // Set the request
                     if (method_exists($handler, 'setRequest')) {
@@ -187,13 +216,24 @@ class Router
     }
 
     /**
+     * Return vars for request
+     * @return array
+     */
+    public static function getPutVars()
+    {
+        $postdata = file_get_contents('php://input');
+        $request = json_decode($postdata, true);
+        return $request;
+    }
+
+    /**
      * Register routes.
      *
      * @param array $routes - an array of routes to handlers
      *
      * @return array - the array of all your routes
      */
-    public static function registerRoutes($routes = array())
+    public static function registerRoutes($routes = [])
     {
         return self::$routes = array_merge(self::$routes, $routes);
     }

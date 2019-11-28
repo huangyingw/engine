@@ -1,13 +1,12 @@
 <?php
-/**
- */
 
 namespace Minds\Core\Events\Hooks;
 
 use Minds\Core;
+use Minds\Core\Referrals\Referral;
 use Minds\Entities;
-use Minds\Helpers;
 use Minds\Core\Events\Dispatcher;
+use Minds\Core\Di\Di;
 
 class Register
 {
@@ -39,6 +38,14 @@ class Register
                     $params['user']->save();
                     $params['user']->subscribe($user->guid);
                 }
+     
+                $referral = new Referral();
+                $referral->setProspectGuid($params['user']->getGuid())
+                    ->setReferrerGuid((string) $user->guid)
+                    ->setRegisterTimestamp(time());
+
+                $manager = Di::_()->get('Referrals\Manager');
+                $manager->add($referral);
             }
         });
 
@@ -50,27 +57,17 @@ class Register
             }
             //send welcome email
             try {
-                $template = new Core\Email\Template();
-                $template
-                  ->setTemplate()
-                  ->setBody('welcome.tpl')
-                  ->set('guid', $params['user']->guid)
-                  ->set('username', $params['user']->username)
-                  ->set('email', $_POST['email'])
-                  ->set('user', $params['user']);
-                $message = new Core\Email\Message();
-                $message->setTo($params['user'])
-                  ->setMessageId(implode('-', [ $params['user']->guid, sha1($params['user']->getEmail()), sha1('register-' . time()) ]))
-                  ->setSubject("Welcome to Minds. Introduce yourself.")
-                  ->setHtml($template);
-                $mailer = new Core\Email\Mailer();
-                $mailer->queue($message);
-
-                Core\Queue\Client::build()->setQueue("Registered")
+                Core\Queue\Client::build()->setQueue('Registered')
                     ->send([
-                        "user_guid" => $params['user']->guid,
+                        'user_guid' => $params['user']->guid,
                     ]);
-            } catch (\Exception $e) { }
+                //Delay by 15 minutes (aws max) so the user has time to complete their profile
+                Core\Queue\Client::build()->setQueue('WelcomeEmail')
+                    ->send([
+                        'user_guid' => $params['user']->guid,
+                    ], 900);
+            } catch (\Exception $e) {
+            }
         });
     }
 }

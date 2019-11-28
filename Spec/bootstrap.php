@@ -2,9 +2,14 @@
 
 ini_set('memory_limit', '256M');
 
+# Redirect error_log output to blackhole
+ini_set('error_log', '/dev/null');
+
 global $CONFIG;
 
 date_default_timezone_set('UTC');
+
+define('__MINDS_ROOT__', dirname(__FILE__) . '/../');
 
 $minds = new Minds\Core\Minds();
 $minds->loadLegacy();
@@ -16,28 +21,17 @@ $CONFIG->cassandra = new stdClass;
 $CONFIG->cassandra->keyspace = 'phpspec';
 $CONFIG->cassandra->servers = ['127.0.0.1'];
 $CONFIG->cassandra->cql_servers = ['127.0.0.1'];
+$CONFIG->cassandra->username = 'cassandra';
+$CONFIG->cassandra->password = 'cassandra';
 
 $CONFIG->payments = [
-  'braintree' => [
-    'default' => [
-      'environment' => 'sandbox',
-      'merchant_id' => 'foobar',
-      'master_merchant_id' => 'foobar',
-      'public_key' => 'random',
-      'private_key' => 'random_private'
+    'stripe' => [
+        'api_key' => 'phpspec',
     ],
-    'merchants' => [
-      'environment' => 'sandbox',
-      'merchant_id' => 'foobar',
-      'master_merchant_id' => 'foobar',
-      'public_key' => 'random',
-      'private_key' => 'random_private'
-    ],
-  ]];
+];
 
-class Mock 
+class Mock
 {
-
     private $a;
 
     const BATCH_COUNTER = null;
@@ -60,6 +54,11 @@ class Mock
         return $this;
     }
 
+    public function withCredentials($username, $password)
+    {
+        return $this;
+    }
+
     public function withRetryPolicy()
     {
         return $this;
@@ -73,12 +72,10 @@ class Mock
 
     public function request()
     {
-
     }
 
     public function create()
     {
-      
     }
 
     public function withContactPoints()
@@ -93,12 +90,18 @@ class Mock
 
     public static function text()
     {
-      
     }
 
     public static function varint()
     {
+    }
 
+    public static function bigint()
+    {
+    }
+
+    public static function timestamp()
+    {
     }
 
     public function uuid()
@@ -119,6 +122,11 @@ class Mock
     public function toDouble()
     {
         return (double) $this->a;
+    }
+
+    public function toFloat()
+    {
+        return $this->a;
     }
 
     public function value()
@@ -163,22 +171,101 @@ class Mock
 
     public static function get()
     {
-
     }
 
     public static function boolean()
     {
-
     }
 
-    public static function set()
+    public static function set(...$args)
     {
-
+        return new Mock(...$args);
     }
 
     public function add()
     {
+    }
+}
 
+class MockMap
+{
+    private $keyType;
+    private $valueType;
+    private $kv;
+
+    public function __construct($keyType, $valueType)
+    {
+        $this->keyType = $keyType;
+        $this->valueType = $valueType;
+    }
+
+    public function set($key, $value)
+    {
+        $this->kv[(string) $key] = new Mock($value);
+        return $this;
+    }
+
+    public function values()
+    {
+        return ($this->kv);
+    }
+}
+
+class MockCollectionValues implements ArrayAccess
+{
+    private $values;
+
+    public function __construct($values)
+    {
+        $this->values = $values;
+    }
+
+    public function __get($key)
+    {
+        $key = md5($key);
+        return $this->values[$key];
+    }
+
+    public function offsetExists($offset)
+    {
+        $key = md5($offset);
+        return isset($this->values[$key]);
+    }
+
+    public function offsetGet($offset)
+    {
+        $key = md5($offset);
+        return $this->values[$key];
+    }
+
+    public function offsetSet($offset, $value)
+    {
+    }
+    
+    public function offsetUnset($offset)
+    {
+    }
+}
+
+class MockSet
+{
+    private $valueType;
+    private $values = [];
+
+    public function __construct($valueType)
+    {
+        $this->valueType = $valueType;
+    }
+
+    public function add($value)
+    {
+        $this->values[] = new Mock($value);
+        return $this;
+    }
+
+    public function values()
+    {
+        return array_values($this->values);
     }
 }
 
@@ -188,19 +275,25 @@ if (!class_exists('Cassandra')) {
     class_alias('Mock', 'Cassandra\Varint');
     class_alias('Mock', 'Cassandra\Timestamp');
     class_alias('Mock', 'Cassandra\Type');
-    class_alias('Mock', 'Cassandra\Type\Set');
-    class_alias('Mock', 'Cassandra\Type\Map');
+    class_alias('MockSet', 'Cassandra\Type\Set');
+    class_alias('MockMap', 'Cassandra\Type\Map');
     class_alias('Mock', 'Cassandra\Decimal');
     class_alias('Mock', 'Cassandra\Bigint');
+    class_alias('Mock', 'Cassandra\Float_');
     class_alias('Mock', 'Cassandra\Tinyint');
-    class_alias('Mock', 'Cassandra\Set');
-    class_alias('Mock', 'Cassandra\Map');
+    class_alias('MockSet', 'Cassandra\Set');
+    class_alias('MockMap', 'Cassandra\Map');
     class_alias('Mock', 'Cassandra\Uuid');
-    class_alias('Mock', 'MongoDB\BSON\UTCDateTime');
+    class_alias('Mock', 'Cassandra\Timeuuid');
+    class_alias('Mock', 'Cassandra\Boolean');
     class_alias('Mock', 'Cassandra\RetryPolicy\Logging');
     class_alias('Mock', 'Cassandra\RetryPolicy\DowngradingConsistency');
 }
 
-Minds\Core\Di\Di::_()->bind('Database\Cassandra\Cql', function($di) {
+if (!class_exists('MongoDB\BSON\UTCDateTime')) {
+    class_alias('Mock', 'MongoDB\BSON\UTCDateTime');
+}
+
+Minds\Core\Di\Di::_()->bind('Database\Cassandra\Cql', function ($di) {
     return new Mock;
 });

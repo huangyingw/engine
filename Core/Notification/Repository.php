@@ -1,16 +1,15 @@
 <?php
 /**
- * SQL Repository
+ * SQL Repository.
  */
+
 namespace Minds\Core\Notification;
 
-use Minds\Controllers\Cli\PDO;
 use Minds\Core\Di\Di;
 use Minds\Common\Repository\Response;
 
 class Repository
 {
-
     /** @var $sql */
     private $sql;
 
@@ -20,8 +19,10 @@ class Repository
     }
 
     /**
-     * Get a single notification
+     * Get a single notification.
+     *
      * @param $uuid
+     *
      * @return Notification
      */
     public function get($uuid)
@@ -46,14 +47,13 @@ class Repository
                 ->setReadTimestamp($row['read_timestamp'])
                 ->setType($row['notification_type'])
                 ->setData(json_decode($row['data'], true));
-
         }
 
         return $notification;
     }
 
     /**
-     * Get a list of notifications
+     * Get a list of notifications.
      */
     public function getList($opts)
     {
@@ -79,19 +79,19 @@ class Repository
             INNER JOIN (
                     SELECT batch_id FROM notification_batches
                     WHERE user_guid=?
-                ) as ns 
+                ) as ns
                 ON (notifications.batch_id=ns.batch_id)";
 
         $joinParams = [
             (int) $opts['to_guid'],
         ];*/
 
-        $union = "
+        $union = '
             SELECT uuid, to_guid, from_guid, entity_guid, notification_type,
                 created_timestamp, read_timestamp, data
             FROM notifications
-            WHERE to_guid = ?";
-        
+            WHERE to_guid = ?';
+
         $unionParams = [
             (int) $opts['to_guid'],
         ];
@@ -109,18 +109,18 @@ class Repository
         $query = $union;
         $params = $unionParams;
 
-        $query .= " ORDER BY created_timestamp DESC
-                      LIMIT ? OFFSET ?";
+        $query .= ' ORDER BY created_timestamp DESC
+                      LIMIT ? OFFSET ?';
 
         $params[] = (int) $opts['limit'];
         $params[] = (int) $opts['offset'];
-        
+
         $statement = $this->sql->prepare($query);
-        
+
         $statement->execute($params);
 
-        $response =  new Response();
-        foreach($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+        $response = new Response();
+        foreach ($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
             $notification = new Notification();
             $notification->setUUID($row['uuid'])
                 ->setToGuid($row['to_guid'])
@@ -130,7 +130,6 @@ class Repository
                 ->setReadTimestamp($row['read_timestamp'])
                 ->setType($row['notification_type'])
                 ->setData(json_decode($row['data'], true));
-
             $response[] = $notification;
         }
         $response->setPagingToken((int) $opts['offset'] + (int) $opts['limit']);
@@ -139,28 +138,32 @@ class Repository
     }
 
     /**
-     * Add a notification to the database
+     * Add a notification to the database.
+     *
      * @param Notification[] $notifications
+     *
      * @return Notification|bool
      */
     public function add($notifications)
     {
         if (!is_array($notifications)) {
-            $notifications = [ $notifications ];
+            $notifications = [$notifications];
         }
 
-        $query = "INSERT INTO notifications (
+        $query = 'INSERT INTO notifications (
+            uuid,
             to_guid,
             from_guid,
             entity_guid,
             notification_type,
             data,
             batch_id
-            ) VALUES ";
+            ) VALUES ';
 
         $values = [];
         foreach ($notifications as $notification) {
             $values = array_merge($values, [
+                $notification->getUuid(),
                 $notification->getToGuid(),
                 $notification->getFromGuid(),
                 $notification->getEntityGuid(),
@@ -170,7 +173,7 @@ class Repository
             ]);
         }
 
-        $query .= implode(',', array_fill(0, count($notifications), '(?,?,?,?,?,?)'));
+        $query .= implode(',', array_fill(0, count($notifications), '(?,?,?,?,?,?,?)'));
 
         $query .= ' RETURNING UUID';
 
@@ -186,13 +189,10 @@ class Repository
     // TODO
     public function update($notification, $fields)
     {
-
     }
 
     // TODO
     public function delete($uuid)
     {
-
     }
-
 }

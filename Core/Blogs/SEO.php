@@ -3,19 +3,16 @@
 namespace Minds\Core\Blogs;
 
 use Minds\Core;
+use Minds\Core\Di\Di;
 use Minds\Entities;
 use Minds\Helpers;
+use Minds\Helpers\Counters;
+use Zend\Diactoros\ServerRequestFactory;
 
 class SEO
 {
-    /** @var Manager */
-    protected $manager;
-
     public function __construct(
-        $manager = null
-    )
-    {
-        $this->manager = $manager ?: new Manager();
+    ) {
     }
 
     public function setup()
@@ -76,22 +73,34 @@ class SEO
             $params = $event->getParameters();
             $slugs = $params['slugs'];
 
-            if ((count($slugs) < 3) || ($slugs[1] != 'blog')) {
+            /** @var Core\Pro\Domain $proDomain */
+            $proDomain = Core\Di\Di::_()->get('Pro\Domain');
+
+            $request = ServerRequestFactory::fromGlobals();
+            $serverParams = $request->getServerParams() ?? [];
+            $host = parse_url($serverParams['HTTP_ORIGIN'] ?? '', PHP_URL_HOST) ?: $serverParams['HTTP_HOST'];
+
+            $proSettings = $proDomain->lookup($host);
+
+            if ($proSettings && (count($slugs) < 2 || $slugs[0] === 'blog')) {
+                $slugParts = explode('-', $slugs[1]);
+            } elseif (!$proSettings && count($slugs) >= 3 && $slugs[1] === 'blog') {
+                $slugParts = explode('-', $slugs[2]);
+            } else {
                 return;
             }
 
-            $slugParts = explode('-', $slugs[2]);
             $guid = $slugParts[count($slugParts) - 1];
 
             if (!is_numeric($guid)) {
                 return;
             }
 
-            $event->setResponse($this->viewHandler([ $guid ]));
+            $event->setResponse($this->viewHandler([$guid]));
         });
     }
 
-    public function viewHandler($slugs = [])
+    public function viewHandler($slugs = [], $manager = null)
     {
         if (!is_numeric($slugs[0]) && isset($slugs[1]) && is_numeric($slugs[1])) {
             $guid = $slugs[1];
@@ -99,7 +108,10 @@ class SEO
             $guid = $slugs[0];
         }
 
-        $blog = $this->manager->get($guid);
+        if (is_null($manager)) {
+            $manager = Di::_()->get('Blogs\Manager');
+        }
+        $blog = $manager->get($guid);
         if (!$blog || !$blog->getTitle() || Helpers\Flags::shouldFail($blog) || !Core\Security\ACL::_()->read($blog)) {
             header("HTTP/1.0 404 Not Found");
             return [
@@ -113,7 +125,7 @@ class SEO
             $body = substr($body, 0, 139) . '…';
         }
 
-        $url = $blog->getPermaURL();
+        $url = $blog->getPermaURL() ?: $blog->getUrl();
         $ssl = (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443) ||
             (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https');
 
@@ -123,8 +135,12 @@ class SEO
 
         $custom_meta = $blog->getCustomMeta();
 
-        return $meta = array(
-            'title' => $custom_meta['title'] ?: $blog->getTitle(),
+        // More than 2 votes allows indexing to search engines (prevents spam)
+
+        $allowIndexing = Counters::get($blog->getGuid(), 'thumbs:up') >= 2;
+
+        return $meta = [
+            'title' => ($custom_meta['title'] ?: $blog->getTitle()) . ' | ' .  Core\Di\Di::_()->get('Config')->site_name,
             'description' => $custom_meta['description'] ?: $body,
             'author' => $custom_meta['author'] ?: '@' . $blog->getOwnerObj()['username'],
             'og:title' => $custom_meta['title'] ?: $blog->getTitle(),
@@ -136,7 +152,7 @@ class SEO
             'og:image:height' => 1000,
             'al:ios:url' => 'minds://blog/view/' . $blog->getGuid(),
             'al:android:url' => 'minds://blog/view/' . $blog->getGuid(),
-            'robots' => $blog->getRating() == 1 ? 'all' : 'noindex',
-        );
+            'robots' => $allowIndexing ? 'all' : 'noindex',
+        ];
     }
 }

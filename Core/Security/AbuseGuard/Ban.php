@@ -7,19 +7,27 @@ namespace Minds\Core\Security\AbuseGuard;
 use Minds\Core;
 use Minds\Core\Events\Dispatcher;
 use Minds\Entities;
+use Minds\Core\Di\Di;
 
 class Ban
 {
-
     private $accused;
     private $recover;
     private $events = true;
 
-    public function __construct($sessions = null, $recover = null, $events = true)
-    {
+    /** @var Core\Channels\Ban */
+    private $channelsBanManager;
+
+    public function __construct(
+        $sessions = null,
+        $recover = null,
+        $events = true,
+        $channelsBanManager = null
+    ) {
         $this->sessions = $sessions ?: new Core\Data\Sessions();
         $this->recover = $recover ?: new Recover();
         $this->events = $events;
+        $this->channelsBanManager = $channelsBanManager ?: Di::_()->get('Channels\Ban');
     }
 
     public function setAccused($accused)
@@ -36,21 +44,15 @@ class Ban
             return true;
         }
 
-        echo "\n$user->guid now banned ({$this->accused->getScore()}) \n";
+        error_log("$user->guid now banned ({$this->accused->getScore()})");
 
-        $user->ban_reason = 'spam';
-        $user->banned = 'yes';
-        $user->code = '';
-        $success = (bool) $user->save();
-
-        $this->sessions->destroyAll($user->guid);
-
-        //@todo make this a dependency too
-        Dispatcher::trigger('ban', 'user', $user);
+        $this->channelsBanManager
+            ->setUser($user)
+            ->ban(8); // Spam
 
         $this->recover->setAccused($this->accused)
             ->recover();
-        echo "\n$user->guid recovered";
+        error_log("$user->guid recovered");
 
         if ($this->events) {
             $event = new Core\Analytics\Metrics\Event();
@@ -65,7 +67,6 @@ class Ban
                 ->push();
         }
 
-        return $success;
+        return true;
     }
-
 }

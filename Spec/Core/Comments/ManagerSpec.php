@@ -12,6 +12,7 @@ use Minds\Core\Comments\Repository;
 use Minds\Core\EntitiesBuilder;
 use Minds\Core\Luid;
 use Minds\Core\Security\ACL;
+use Minds\Core\Security\Spam;
 use Minds\Entities\Entity;
 use Minds\Entities\User;
 use Minds\Exceptions\BlockedUserException;
@@ -44,7 +45,10 @@ class ManagerSpec extends ObjectBehavior
     /** @var EntitiesBuilder */
     protected $entitiesBuilder;
 
-    function let(
+    /** @var Security\Spam */
+    protected $spam;
+
+    public function let(
         Repository $repository,
         LegacyRepository $legacyRepository,
         ACL $acl,
@@ -52,7 +56,8 @@ class ManagerSpec extends ObjectBehavior
         ThreadNotifications $threadNotifications,
         CreateEventDispatcher $createEventDispatcher,
         CountCache $countCache,
-        EntitiesBuilder $entitiesBuilder
+        EntitiesBuilder $entitiesBuilder,
+        Spam $spam
     ) {
         $this->beConstructedWith(
             $repository,
@@ -62,7 +67,8 @@ class ManagerSpec extends ObjectBehavior
             $threadNotifications,
             $createEventDispatcher,
             $countCache,
-            $entitiesBuilder
+            $entitiesBuilder,
+            $spam
         );
 
         $this->repository = $repository;
@@ -73,19 +79,19 @@ class ManagerSpec extends ObjectBehavior
         $this->createEventDispatcher = $createEventDispatcher;
         $this->countCache = $countCache;
         $this->entitiesBuilder = $entitiesBuilder;
+        $this->spam = $spam;
     }
 
-    function it_is_initializable()
+    public function it_is_initializable()
     {
         $this->shouldHaveType('Minds\Core\Comments\Manager');
     }
 
-    function it_should_add(
+    public function it_should_add(
         Comment $comment,
         Entity $entity,
         User $owner
-    )
-    {
+    ) {
         $comment->getOwnerEntity(false)
             ->shouldBeCalled()
             ->willReturn($owner);
@@ -102,11 +108,11 @@ class ManagerSpec extends ObjectBehavior
             ->shouldBeCalled()
             ->willReturn($entity);
 
-        $entity->get('guid')
+        /*$entity->get('guid')
             ->shouldBeCalled()
-            ->willReturn(5000);
+            ->willReturn(5000);*/
 
-        $this->acl->interact(5000, $owner, 'comment')
+        $this->acl->interact($entity, $owner, 'comment')
             ->shouldBeCalled()
             ->willReturn(true);
 
@@ -151,12 +157,11 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn(true);
     }
 
-    function it_should_throw_if_rate_limited_user_during_add(
+    public function it_should_throw_if_rate_limited_user_during_add(
         Comment $comment,
         Entity $entity,
         User $owner
-    )
-    {
+    ) {
         $comment->getOwnerEntity(false)
             ->shouldBeCalled()
             ->willReturn($owner);
@@ -169,11 +174,11 @@ class ManagerSpec extends ObjectBehavior
             ->shouldBeCalled()
             ->willReturn($entity);
 
-        $entity->get('guid')
+        /*$entity->get('guid')
             ->shouldBeCalled()
-            ->willReturn(100);
+            ->willReturn(100);*/
 
-        $this->acl->interact(100, $owner, "comment")
+        $this->acl->interact($entity, $owner, "comment")
             ->shouldBeCalled()
             ->willReturn(false);
 
@@ -182,12 +187,11 @@ class ManagerSpec extends ObjectBehavior
             ->duringAdd($comment);
     }
 
-    function it_should_throw_if_blocked_user_during_add(
+    public function it_should_throw_if_blocked_user_during_add(
         Comment $comment,
         Entity $entity,
         User $owner
-    )
-    {
+    ) {
         $comment->getOwnerEntity(false)
             ->shouldBeCalled()
             ->willReturn($owner);
@@ -204,11 +208,11 @@ class ManagerSpec extends ObjectBehavior
             ->shouldBeCalled()
             ->willReturn($entity);
 
-        $entity->get('guid')
+        /*$entity->get('guid')
             ->shouldBeCalled()
-            ->willReturn(100);
+            ->willReturn(100);*/
 
-        $this->acl->interact(100, $owner, "comment")
+        $this->acl->interact($entity, $owner, "comment")
             ->shouldBeCalled()
             ->willReturn(true);
 
@@ -221,10 +225,9 @@ class ManagerSpec extends ObjectBehavior
             ->duringAdd($comment);
     }
 
-    function it_should_update(
+    public function it_should_update(
         Comment $comment
-    )
-    {
+    ) {
         $comment->getDirtyAttributes()
             ->shouldBeCalled()
             ->willReturn(['body']);
@@ -246,10 +249,86 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn(true);
     }
 
-    function it_should_delete(
+
+    public function it_should_restore(
+        Comment $comment,
+        Entity $entity,
+        User $owner
+    ) {
+        $comment->getOwnerEntity(false)
+            ->shouldBeCalled()
+            ->willReturn($owner);
+
+        $comment->getOwnerGuid()
+            ->shouldBeCalled()
+            ->willReturn(1000);
+
+        $comment->getEntityGuid()
+            ->shouldBeCalled()
+            ->willReturn(5000);
+
+        $this->entitiesBuilder->single(5000)
+            ->shouldBeCalled()
+            ->willReturn($entity);
+
+        $this->acl->interact($entity, $owner)
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->legacyRepository->isFallbackEnabled()
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->legacyRepository->add($comment, Repository::$allowedEntityAttributes, false)
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->repository->add($comment)
+            ->shouldBeCalled()
+            ->willReturn(true);
+
+        $this->countCache->destroy($comment)
+            ->shouldBeCalled()
+            ->willReturn(null);
+
+        $this
+            ->restore($comment)
+            ->shouldReturn(true);
+    }
+
+    public function it_should_throw_if_blocked_user_during_restore(
+        Comment $comment,
+        Entity $entity,
+        User $owner
+    ) {
+        $comment->getOwnerEntity(false)
+            ->shouldBeCalled()
+            ->willReturn($owner);
+
+        $comment->getOwnerGuid()
+            ->shouldBeCalled()
+            ->willReturn(1000);
+
+        $comment->getEntityGuid()
+            ->shouldBeCalled()
+            ->willReturn(5000);
+
+        $this->entitiesBuilder->single(5000)
+            ->shouldBeCalled()
+            ->willReturn($entity);
+
+        $this->acl->interact($entity, $owner)
+            ->shouldBeCalled()
+            ->willReturn(false);
+
+        $this
+            ->shouldThrow(BlockedUserException::class)
+            ->duringRestore($comment);
+    }
+
+    public function it_should_delete(
         Comment $comment
-    )
-    {
+    ) {
         $this->acl->write($comment)
             ->shouldBeCalled()
             ->willReturn(true);
@@ -267,10 +346,9 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn(true);
     }
 
-    function it_should_not_delete_if_acl_catches(
+    public function it_should_not_delete_if_acl_catches(
         Comment $comment
-    )
-    {
+    ) {
         $this->acl->write($comment)
             ->shouldBeCalled()
             ->willReturn(false);
@@ -280,10 +358,9 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn(false);
     }
 
-    function it_should_get_by_luid(
+    public function it_should_get_by_luid(
         Comment $comment
-    )
-    {
+    ) {
         $this->repository->get('5000', null, '6000')
             ->shouldBeCalled()
             ->willReturn($comment);
@@ -300,10 +377,9 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn($comment);
     }
 
-    function it_should_fallback_to_legacy_if_throws_because_old_guid_during_get_by_luid(
+    public function it_should_fallback_to_legacy_if_throws_because_old_guid_during_get_by_luid(
         Comment $comment
-    )
-    {
+    ) {
         $this->repository->get(Argument::cetera())
             ->shouldNotBeCalled();
 
@@ -316,7 +392,7 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn($comment);
     }
 
-    function it_should_return_null_if_throws_during_get_by_luid()
+    public function it_should_return_null_if_throws_during_get_by_luid()
     {
         $this->repository->get(Argument::cetera())
             ->shouldNotBeCalled();
@@ -329,7 +405,7 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn(null);
     }
 
-    function it_should_count()
+    public function it_should_count()
     {
         $this->repository->count(5000, 0)
             ->shouldBeCalled()
@@ -340,7 +416,7 @@ class ManagerSpec extends ObjectBehavior
             ->shouldReturn(3);
     }
 
-    function it_should_return_zero_if_throws_during_count()
+    public function it_should_return_zero_if_throws_during_count()
     {
         $this->repository->count(5000, 0)
             ->willThrow(new \Exception());

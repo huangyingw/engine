@@ -8,8 +8,11 @@
 namespace Minds\Core\Entities;
 
 use Minds\Common\Urn;
+use Minds\Core\Entities\Delegates\BoostGuidResolverDelegate;
+use Minds\Core\Entities\Delegates\CommentGuidResolverDelegate;
 use Minds\Core\Entities\Delegates\EntityGuidResolverDelegate;
 use Minds\Core\Entities\Delegates\ResolverDelegate;
+use Minds\Core\Entities\Delegates\FilterEntitiesDelegate;
 use Minds\Core\Security\ACL;
 use Minds\Entities\User;
 
@@ -39,6 +42,8 @@ class Resolver
     {
         $this->resolverDelegates = $resolverDelegates ?: [
             EntityGuidResolverDelegate::class => new EntityGuidResolverDelegate(),
+            BoostGuidResolverDelegate::class => new BoostGuidResolverDelegate(),
+            CommentGuidResolverDelegate::class => new CommentGuidResolverDelegate(),
         ];
 
         $this->acl = $acl ?: ACL::_();
@@ -104,7 +109,8 @@ class Resolver
             $resolvedEntities = $resolverDelegate->resolve($batch, $this->opts);
 
             foreach ($resolvedEntities as $resolvedEntity) {
-                $resolvedMap[$resolverDelegate->asUrn($resolvedEntity)] = $resolvedEntity;
+                $urn = $resolverDelegate->asUrn($resolvedEntity);
+                $resolvedMap[$urn] = $resolverDelegate->map($urn, $resolvedEntity);
             }
         }
 
@@ -112,20 +118,29 @@ class Resolver
 
         $sorted = [];
 
-        foreach ($this->urns as $urn) {
-            $sorted[] = $resolvedMap[$urn->getUrn()] ?? null;
+        foreach ($resolvedMap as $entity) {
+            $sorted[] = $entity ?? null;
         }
 
         // Filter out invalid entities
 
-        $sorted = array_filter($sorted, function($entity) { return (bool) $entity; });
+        $sorted = array_filter($sorted, function ($entity) {
+            return (bool) $entity;
+        });
 
         // Filter out forbidden entities
-
-        $sorted = array_filter($sorted, function($entity) { return $this->acl->read($entity, $this->user); });
+        $filterDelegate = new FilterEntitiesDelegate($this->user, time(), $this->acl);
+        $sorted = $filterDelegate->filter($sorted);
 
         //
 
         return $sorted;
+    }
+
+    public function single($urn)
+    {
+        $this->urns = [$urn];
+        $entities = $this->fetch();
+        return $entities[0];
     }
 }

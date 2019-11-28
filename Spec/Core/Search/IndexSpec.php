@@ -4,6 +4,7 @@ namespace Spec\Minds\Core\Search;
 
 use Minds\Core\Data\ElasticSearch\Client;
 use Minds\Core\Data\ElasticSearch\Prepared\Index;
+use Minds\Core\Data\ElasticSearch\Prepared\Update;
 use Minds\Core\Di\Di;
 use Minds\Core\Search\Mappings\Factory;
 use Minds\Core\Search\Mappings\MappingInterface;
@@ -16,7 +17,7 @@ class IndexSpec extends ObjectBehavior
     protected $_index = 'phpspec';
     protected $_mappingsFactory;
 
-    function let(
+    public function let(
         Client $client,
         Factory $mappingsFactory
     ) {
@@ -30,16 +31,15 @@ class IndexSpec extends ObjectBehavior
         });
     }
 
-    function it_is_initializable()
+    public function it_is_initializable()
     {
         $this->shouldHaveType('Minds\Core\Search\Index');
     }
 
-    function it_should_index(
+    public function it_should_index(
         \ElggEntity $entity,
         MappingInterface $mapper
-    )
-    {
+    ) {
         $this->_mappingsFactory->build($entity)
             ->shouldBeCalled()
             ->willReturn($mapper);
@@ -66,7 +66,7 @@ class IndexSpec extends ObjectBehavior
             ->willReturn('1000');
 
         $this->_client->request(Argument::that(function ($prepared) {
-            if (!($prepared instanceof Index)) {
+            if (!($prepared instanceof Update)) {
                 return false;
             }
 
@@ -77,9 +77,9 @@ class IndexSpec extends ObjectBehavior
                 $query['type'] == 'test' &&
                 $query['id'] == '1000' &&
                 isset($query['body']) &&
-                $query['body']['guid'] == '1000' &&
-                $query['body']['type'] == 'test' &&
-                isset($query['body']['suggest'])
+                $query['body']['doc']['guid'] == '1000' &&
+                $query['body']['doc']['type'] == 'test' &&
+                isset($query['body']['doc']['suggest'])
             ;
         }))
             ->shouldBeCalled()
@@ -90,7 +90,7 @@ class IndexSpec extends ObjectBehavior
             ->shouldReturn(true);
     }
 
-    function it_should_return_false_during_index_if_no_entity()
+    public function it_should_return_false_during_index_if_no_entity()
     {
         $this
             ->index(null)

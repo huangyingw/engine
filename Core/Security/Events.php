@@ -26,7 +26,7 @@ class Events
     protected function strposa($haystack, $needles, $offset = 0)
     {
         if (!is_array($needles)) {
-            $needles = array($needles);
+            $needles = [$needles];
         }
         foreach ($needles as $query) {
             if (strpos($haystack, $query, $offset) !== false) {
@@ -170,6 +170,7 @@ class Events
             'xn--90aizihgi.xn--p1ai',
             'tinyurl.com',
             'bit.ly',
+            'bit.do',
             '123football.space',
             'bitly.com',
             'j.mp',
@@ -306,13 +307,23 @@ class Events
             'reworkedgames.eu',
             'mp3gain.sourceforge.net',
             'pages10.com',
-            ];
+            'nudegirIs.info',
+            'aidagirls.com',
+            'alsoloves.com',
+            'hotswishes.com',
+            'instaphoto.club',
+            'intimspace.com',
+            'pornopoisk.info',
+            'localmodels.online',
+            'kaikki-mallit.com',
+            'hotswishes.com',
+        ];
     }
 
     public function onCreateHook($hook, $type, $params, $return = null)
     {
         $object = $params;
-        if ($this->strposa($object->description, $this->prohibitedDomains()) || 
+        if ($this->strposa($object->description, $this->prohibitedDomains()) ||
             $this->strposa($object->briefdescription, $this->prohibitedDomains()) ||
             $this->strposa($object->message, $this->prohibitedDomains()) ||
             $this->strposa($object->title, $this->prohibitedDomains())
@@ -348,6 +359,8 @@ class Events
             $twofactor = new TwoFactor();
             $secret = $twofactor->createSecret(); //we have a new secret for each request
 
+            error_log('2fa - sending SMS to ' . $user->guid);
+
             $this->sms->send($user->telno, $twofactor->getCode($secret));
 
             // create a lookup of a random key. The user can then use this key along side their twofactor code
@@ -356,7 +369,7 @@ class Events
             $key = hash('sha512', $user->username . $user->salt . $bytes);
 
             $lookup = new \Minds\Core\Data\lookup('twofactor');
-            $lookup->set($key, array('_guid' => $user->guid, 'ts' => time(), 'secret' => $secret));
+            $lookup->set($key, ['_guid' => $user->guid, 'ts' => time(), 'secret' => $secret]);
 
             //forward to the twofactor page
             throw new Exceptions\TwoFactorRequired($key);
@@ -364,5 +377,4 @@ class Events
             return false;
         }
     }
-
 }

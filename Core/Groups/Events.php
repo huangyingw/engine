@@ -18,7 +18,7 @@ class Events
      */
     public function register()
     {
-        \elgg_register_plugin_hook_handler('entities_class_loader', 'all', function ($hook, $type, $return, $row) {
+        Dispatcher::register('entities_class_loader', "elgg/hook/all", function ($hook, $type, $return, $row) {
             if ($row->type == 'group') {
                 $entity = new GroupEntity();
                 $entity->loadFromArray((array) $row);
@@ -36,7 +36,13 @@ class Events
             $group = $entity->getContainerEntity();
 
             if ($group instanceof GroupEntity) {
+                /** @var Membership $membership */
                 $membership = Membership::_($group);
+
+                if ($entity instanceof Activity && $entity->getPending()) {
+                    $e->setResponse($group->isOwner($user->guid));
+                    return;
+                }
 
                 $e->setResponse($group->isPublic() || $membership->isMember($user->guid));
             }
@@ -73,6 +79,31 @@ class Events
 
             $group = $entity;
             $e->setResponse(($group->isOwner($user->guid) || $group->isModerator($user->guid)) && $group->isMember($user->guid));
+        });
+
+        Dispatcher::register('acl:interact', 'activity', function ($e) {
+            $params = $e->getParameters();
+            $activity = $params['entity'];
+            $user = $params['user'];
+
+            if ($activity instanceof Activity && $activity->container_guid && $activity->container_guid !== $activity->owner_guid) {
+                $container = EntitiesFactory::build($activity->container_guid);
+
+                if ($container->type === 'group') {
+                    $e->setResponse($container->isMember($user->guid));
+                }
+            }
+        });
+
+        Dispatcher::register('acl:interact', 'group', function ($e) {
+            $params = $e->getParameters();
+            $group = $params['entity'];
+            $user = $params['user'];
+            $interaction = $params['interaction'];
+
+            if ($group instanceof GroupEntity && $interaction === 'comment') {
+                $e->setResponse($group->isMember($user->guid));
+            }
         });
 
         Dispatcher::register('delete', 'activity', function ($e) {
@@ -126,8 +157,16 @@ class Events
             $params = $e->getParameters();
             $group = $params['container'];
             $user = $params['user'];
+            $entity = $params['entity'];
 
-            $e->setResponse($group->isOwner($user->guid) && $group->isMember($user->guid));
+            if ($group->isOwner($user->guid)) {
+                return $e->setResponse(true);
+            }
+
+            // If member and we own the post
+            if ($group->isMember($user->guid) && $entity->owner_guid == $user->guid) {
+                return $e->setResponse(true);
+            }
         });
 
         Dispatcher::register('activity:container:prepare', 'group', function ($e) {
@@ -138,7 +177,7 @@ class Events
 
             if ($group->getModerated() && !$group->isOwner($activity->owner_guid)) {
                 $key = "activity:container:{$group->guid}";
-                $index = array_search($key, $activity->indexes);
+                $index = array_search($key, $activity->indexes, true);
                 if ($index !== false) {
                     unset($activity->indexes[$index]);
                 }
