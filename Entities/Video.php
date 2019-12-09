@@ -188,6 +188,7 @@ class Video extends MindsObject
             'description' => null,
             'license' => null,
             'mature' => null,
+            'nsfw' => null,
             'boost_rejection_reason' => null,
             'hidden' => null,
             'access_id' => null,
@@ -205,6 +206,7 @@ class Video extends MindsObject
             'access_id',
             'container_guid',
             'mature',
+            'nsfw',
             'boost_rejection_reason',
             'rating',
             'time_sent',
@@ -294,6 +296,27 @@ class Video extends MindsObject
     public function setTimeSent($time_sent)
     {
         $this->time_sent = $time_sent;
+        return $this;
+    }
+
+    /**
+     * Return description
+     * @return string
+     */
+    public function getDescription(): string
+    {
+        return $this->description  ?: '';
+    }
+
+    /**
+    * Set description
+    *
+    * @param string $description - description to be set.
+    * @return Video
+    */
+    public function setDescription($description): Video
+    {
+        $this->description = $description;
         return $this;
     }
 }
