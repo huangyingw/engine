@@ -26,3 +26,4 @@ node_modules
 !/.travis.yml
 coverage
 !/.gitlab
+composer.phar
