@@ -17,7 +17,8 @@ class feeds implements Interfaces\Api
         '12h' => '7d',
         '24h' => '7d',
         '7d' => '30d',
-        '30d' => '1y'
+        '30d' => '1y',
+        '1y' => 'all'
     ];
 
     /**
@@ -212,6 +213,7 @@ class feeds implements Interfaces\Api
                     !$periodFallback ||
                     $opts['algorithm'] !== 'top' ||
                     !isset(static::PERIOD_FALLBACK[$opts['period']]) ||
+                    in_array($opts['type'], ['user', 'group'], true) ||
                     ++$i > 2 // Stop at 2nd fallback (i.e. 12h > 7d > 30d)
                 ) {
                     break;
@@ -221,6 +223,7 @@ class feeds implements Interfaces\Api
                 $from = $now - $periodsInSecs[$period];
                 $opts['from_timestamp'] = $from * 1000;
                 $opts['period'] = static::PERIOD_FALLBACK[$period];
+                $opts['limit'] = $limit - $entities->count();
 
                 if (!$fallbackAt) {
                     $fallbackAt = $from;

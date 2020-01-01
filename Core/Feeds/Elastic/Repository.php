@@ -17,6 +17,7 @@ class Repository
         '7d' => 604800,
         '30d' => 2592000,
         '1y' => 31536000,
+        'all' => -1,
     ];
 
     /** @var ElasticsearchClient */
@@ -265,7 +266,7 @@ class Repository
         $timestampUpperBounds = []; // LTE
         $timestampLowerBounds = []; // GT
 
-        if ($algorithm->isTimestampConstrain()) {
+        if ($algorithm->isTimestampConstrain() && static::PERIODS[$opts['period']] > -1) {
             $timestampLowerBounds[] = (time() - static::PERIODS[$opts['period']]) * 1000;
         }
 
@@ -323,23 +324,25 @@ class Repository
                 ];
             }
         } elseif ($opts['hashtags']) {
-            if ($opts['filter_hashtags'] || $algorithm instanceof SortingAlgorithms\Chronological) {
-                if (!isset($body['query']['function_score']['query']['bool']['must'])) {
-                    $body['query']['function_score']['query']['bool']['must'] = [];
-                }
-
-                $body['query']['function_score']['query']['bool']['must'][] = [
-                    'terms' => [
-                        'tags' => $opts['hashtags'],
-                    ],
-                ];
-            } else {
-                $body['query']['function_score']['query']['bool']['must'][] = [
-                    'terms' => [
-                        'tags' => $opts['hashtags'],
-                    ],
-                ];
+            if (!isset($body['query']['function_score']['query']['bool']['should'])) {
+                $body['query']['function_score']['query']['bool']['should'] = [];
             }
+
+            $body['query']['function_score']['query']['bool']['should'][] = [
+                'terms' => [
+                     'tags' => $opts['hashtags'],
+                     'boost' => 1, // hashtags are 10x more valuable then non-hashtags
+                ],
+            ];
+            $body['query']['function_score']['query']['bool']['should'][] = [
+                'multi_match' => [
+                    'query' => implode(' ', $opts['hashtags']),
+                    'fields' => ['title', 'message', 'description'],
+                    'operator' => 'or',
+                    'boost' => 0.1
+                ],
+            ];
+            $body['query']['function_score']['query']['bool']['minimum_should_match'] = 1;
         }
 
         if ($opts['exclude']) {

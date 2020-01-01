@@ -283,5 +283,18 @@ class ProhibitedDomains
         'localmodels.online',
         'kaikki-mallit.com',
         'hotswishes.com',
+        '/diigo.com',
+        '.storeboard.com',
+        '.folkd.com',
+        '/ttlink.com',
+        '/mix.com',
+        '/list.ly',
+        '.adpost.com',
+        '.23hq.com',
+        '/lineupnow.com',
+        '/amusecandy.com',
+        '/360mate.com',
+        'rebrand.ly',
+        'fiverr.com', // temporarily until better defence is built
     ];
 }
