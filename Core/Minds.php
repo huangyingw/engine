@@ -5,6 +5,7 @@ namespace Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Core\Events\Dispatcher;
 use Minds\Interfaces\ModuleInterface;
+use Minds\Helpers;
 
 /**
  * Core Minds Engine.
@@ -16,7 +17,9 @@ class Minds extends base
     public static $booted = false;
 
     private $modules = [
+        Log\Module::class,
         Events\Module::class,
+        Features\Module::class,
         SSO\Module::class,
         Email\Module::class,
         Experiments\Module::class,
@@ -31,6 +34,9 @@ class Minds extends base
         VideoChat\Module::class,
         Feeds\Module::class,
         Front\Module::class,
+        Captcha\Module::class,
+        SEO\Sitemaps\Module::class,
+        Discovery\Module::class,
     ];
 
     /**
@@ -104,7 +110,6 @@ class Minds extends base
         (new Groups\GroupsProvider())->register();
         (new Search\SearchProvider())->register();
         (new Votes\VotesProvider())->register();
-        (new Features\FeaturesProvider())->register();
         (new SMS\SMSProvider())->register();
         (new Blockchain\BlockchainProvider())->register();
         (new Issues\IssuesProvider())->register();
@@ -160,8 +165,8 @@ class Minds extends base
         self::$booted = true;
 
         /*
-         * System loaded and ready
-         */
+        * System loaded and ready
+        */
         Dispatcher::trigger('ready', 'elgg/event/system', null, true);
     }
 
@@ -184,6 +189,11 @@ class Minds extends base
         if (file_exists(__MINDS_ROOT__.'/multi.settings.php')) {
             define('multisite', true);
             require_once __MINDS_ROOT__.'/multi.settings.php';
+        }
+        // Load environment values
+        $env = Helpers\Env::getMindsEnv();
+        foreach ($env as $key => $value) {
+            $CONFIG->set($key, $value, ['recursive' => true]);
         }
     }
 

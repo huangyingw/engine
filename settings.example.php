@@ -143,7 +143,7 @@ $CONFIG->__site_secret__ = '{{site-secret}}';
 // $CONFIG->cdn_url = 'http://{{domain}}/';
 $CONFIG->site_url = 'http://{{domain}}/';
 $CONFIG->cdn_url = 'http://{{domain}}/';
-$CONFIG->cdn_assets_url = 'http://{{domain}}/en/';
+$CONFIG->cdn_assets_url = 'http://{{domain}}/';
 $CONFIG->zmq_server = 'localhost';
 $CONFIG->checkout_url = 'http://{{checkout_domain}}/';
 
@@ -483,6 +483,9 @@ $CONFIG->set('features', [
     'pro' => false,
     'webtorrent' => false,
     'top-feeds-by-age' => true,
+    'ux-2020' => true,
+    'modal-pager' => true,
+    'wallet-upgrade' => true
 ]);
 
 $CONFIG->set('email', [
@@ -581,11 +584,15 @@ $CONFIG->set('gitlab', [
 
 $CONFIG->set('pro', [
     'handler' => '',
-    'root_domains' => ['minds.com', 'www.minds.com', 'localhost'],
+    'root_domains' => ['minds.com', 'www.minds.com', 'localhost', 'localhost:8080', 'localhost:4200', 'nginx', 'host.docker.internal'],
     'subdomain_suffix' => 'minds.com',
     'dynamodb_table_name' => 'traefik',
 ]);
 
+$CONFIG->set('contact_details', [
+    'name' => 'Minds',
+    'email' => 'info@minds.com',
+]);
 
 $CONFIG->set('upgrades', [
     'pro' => [
@@ -613,4 +620,22 @@ $CONFIG->set('upgrades', [
 $CONFIG->set('email_confirmation', [
     'signing_key' => '',
     'expiration' => 172800, // 48 hours
+]);
+
+$CONFIG->set('unleash', [
+    'apiUrl' => '',
+    'instanceId' => '',
+    'applicationName' => '',
+    'pollingIntervalSeconds' => 300,
+    'metricsIntervalSeconds' => 15
+]);
+
+
+$CONFIG->set('captcha', [
+    'jwt_secret' => '{{site-secret}}',
+    'bypass_key' => '{{site-secret}}',
+]);
+
+$CONFIG->set('cypress', [
+    'shared_key' => '{{site-secret}}',
 ]);

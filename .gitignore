@@ -27,3 +27,5 @@ node_modules
 coverage
 !/.gitlab
 composer.phar
+settings.php-*.bak
+!/.gitattributes

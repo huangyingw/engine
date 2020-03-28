@@ -5,6 +5,7 @@ namespace Spec\Minds\Core\Feeds\Elastic;
 use Minds\Core\Config;
 use Minds\Core\Data\ElasticSearch\Client;
 use Minds\Core\Data\ElasticSearch\Prepared\Search;
+use Minds\Core\Features\Manager as FeaturesManager;
 use Minds\Core\Feeds\Elastic\MetricsSync;
 use Minds\Core\Feeds\Elastic\Repository;
 use PhpSpec\ObjectBehavior;
@@ -18,16 +19,20 @@ class RepositorySpec extends ObjectBehavior
     /** @var Config */
     protected $config;
 
-    public function let(Client $client, Config $config)
+    /** @var FeaturesManager */
+    protected $features;
+
+    public function let(Client $client, Config $config, FeaturesManager $features)
     {
         $this->client = $client;
         $this->config = $config;
+        $this->features = $features;
 
         $config->get('elasticsearch')
             ->shouldBeCalled()
             ->willReturn(['index' => 'minds']);
 
-        $this->beConstructedWith($client, $config);
+        $this->beConstructedWith($client, $config, $features);
     }
 
     public function it_is_initializable()
@@ -218,43 +223,4 @@ class RepositorySpec extends ObjectBehavior
     //         'period' => '!!',
     //     ]);
     // }
-
-    public function it_should_add(MetricsSync $metric)
-    {
-        $metric->getMetric()
-            ->shouldBeCalled()
-            ->willReturn('test');
-
-        $metric->getPeriod()
-            ->shouldBeCalled()
-            ->willReturn('12h');
-
-        $metric->getType()
-            ->shouldBeCalled()
-            ->willReturn('test');
-
-        $metric->getCount()
-            ->shouldBeCalled()
-            ->willReturn(500);
-
-        $metric->getSynced()
-            ->shouldBeCalled()
-            ->willReturn(100000);
-
-        $metric->getGuid()
-            ->shouldBeCalled()
-            ->willReturn(5000);
-
-        $this->client->bulk(Argument::that(function ($arr) {
-            return isset($arr['body']);
-        }))
-            ->shouldBeCalled()
-            ->willReturn(true);
-
-        $this
-            ->add($metric)
-            ->shouldReturn(true);
-
-        $this->bulk();
-    }
 }

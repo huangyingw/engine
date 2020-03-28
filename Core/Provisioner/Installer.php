@@ -3,6 +3,7 @@
 namespace Minds\Core\Provisioner;
 
 use Minds\Core;
+use Minds\Core\Config;
 use Minds\Core\Di\Di;
 use Minds\Entities\Site;
 use Minds\Entities\Activity;
@@ -69,8 +70,8 @@ class Installer
 
     public function setOptions(array $options = [])
     {
-        $this->options = array_merge($this->defaults, $options);
-
+        $envConfig = Helpers\Env::getMindsEnv();
+        $this->options = array_merge($this->defaults, $options, $envConfig);
         return $this;
     }
 
@@ -237,10 +238,11 @@ class Installer
 
     public function provisionCassandra(
         Provisioners\ProvisionerInterface $cassandraStorage = null,
-        $cleanData = false
+        $cleanData = false,
+        $exitOnFailure = false
     ) {
         $cassandraStorage = $cassandraStorage ?: new Provisioners\CassandraProvisioner();
-        $cassandraStorage->provision($cleanData);
+        $cassandraStorage->provision($cleanData, $exitOnFailure);
     }
 
     public function reloadStorage()

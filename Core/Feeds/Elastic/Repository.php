@@ -38,7 +38,7 @@ class Repository
 
         $config = $config ?: Di::_()->get('Config');
 
-        $this->features = $features ?: Di::_()->get('Features');
+        $this->features = $features ?: Di::_()->get('Features\Manager');
 
         $this->index = $config->get('elasticsearch')['index'];
     }
@@ -66,6 +66,7 @@ class Repository
             'query' => null,
             'nsfw' => null,
             'from_timestamp' => null,
+            'reverse_sort' => null,
             'exclude_moderated' => false,
             'moderation_reservations' => null,
             'pinned_guids' => null,
@@ -74,7 +75,7 @@ class Repository
         ], $opts);
 
         if (!$opts['type']) {
-            throw new \Exception('Type must be provided');
+            //   throw new \Exception('Type must be provided');
         }
 
         if (!$opts['algorithm']) {
@@ -127,6 +128,9 @@ class Repository
                 } else {
                     $algorithm = new SortingAlgorithms\Top();
                 }
+                break;
+            case "topV2":
+                $algorithm = new SortingAlgorithms\TopV2();
                 break;
             case "controversial":
                 $algorithm = new SortingAlgorithms\Controversial();
@@ -271,7 +275,11 @@ class Repository
         }
 
         if ($opts['from_timestamp']) {
-            $timestampUpperBounds[] = (int) $opts['from_timestamp'];
+            if (!$opts['reverse_sort']) {
+                $timestampUpperBounds[] = (int) $opts['from_timestamp'];
+            } else {
+                $timestampLowerBounds[] = (int) $opts['from_timestamp'];
+            }
         }
 
         if ($opts['future']) {
@@ -311,7 +319,7 @@ class Repository
                 $body['query']['function_score']['query']['bool']['must'][] = [
                     'multi_match' => [
                         'query' => $opts['query'],
-                        'fields' => ['name^2', 'title^12', 'message^12', 'description^12', 'brief_description^8', 'username^8', 'tags^64'],
+                        'fields' => ['name^2', 'title^12', 'message^12', 'description^12', 'brief_description^8', 'username^8', 'tags^12'],
                     ],
                 ];
             } else {
@@ -392,6 +400,10 @@ class Repository
 
         $esSort = $algorithm->getSort();
         if ($esSort) {
+            if ($opts['reverse_sort']) {
+                $esSort = $this->reverseSort($esSort);
+            }
+
             $body['sort'][] = $esSort;
         }
 
@@ -487,47 +499,16 @@ class Repository
         }
     }
 
-    public function add(MetricsSync $metric)
+    private function reverseSort(array $sort)
     {
-        $key = $metric->getMetric();
+        foreach ($sort as $field => $opts) {
+            if (isset($opts['order'])) {
+                $opts['order'] = $opts['order'] == 'asc' ? 'desc' : 'asc';
+            }
 
-        if ($metric->getPeriod()) {
-            $key .= ":{$metric->getPeriod()}";
+            $sort[$field] = $opts;
         }
 
-        $body = [
-            $key => $metric->getCount(),
-            "{$key}:synced" => $metric->getSynced()
-        ];
-
-        $this->pendingBulkInserts[] = [
-            'update' => [
-                '_id' => (string) $metric->getGuid(),
-                '_index' => 'minds_badger',
-                '_type' => $metric->getType(),
-            ],
-        ];
-
-        $this->pendingBulkInserts[] = [
-            'doc' => $body,
-            'doc_as_upsert' => true,
-        ];
-
-        if (count($this->pendingBulkInserts) > 2000) { //1000 inserts
-            $this->bulk();
-        }
-
-        return true;
-    }
-
-    /**
-     * Run a bulk insert job (quicker).
-     */
-    public function bulk()
-    {
-        if (count($this->pendingBulkInserts) > 0) {
-            $res = $this->client->bulk(['body' => $this->pendingBulkInserts]);
-            $this->pendingBulkInserts = [];
-        }
+        return $sort;
     }
 }

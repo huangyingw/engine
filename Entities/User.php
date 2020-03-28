@@ -62,6 +62,11 @@ class User extends \ElggUser
         $this->attributes['mode'] = ChannelMode::OPEN;
         $this->attributes['email_confirmation_token'] = null;
         $this->attributes['email_confirmed_at'] = null;
+        $this->attributes['surge_token'] = '';
+        $this->attributes['hide_share_buttons'] = 0;
+        $this->attributes['kite_ref_ts'] = 0;
+        $this->attributes['kite_state'] = 'unknown';
+        $this->attributes['disable_autoplay_videos'] = 0;
 
         parent::initializeAttributes();
     }
@@ -684,6 +689,24 @@ class User extends \ElggUser
     }
 
     /**
+     * @return bool
+     */
+    public function getHideShareButtons(): bool
+    {
+        return (bool) $this->hide_share_buttons;
+    }
+
+    /**
+     * @param bool $value
+     * @return User
+     */
+    public function setHideShareButtons(bool $value): User
+    {
+        $this->hide_share_buttons = $value;
+        return $this;
+    }
+
+    /**
      * Subscribes user to another user.
      *
      * @param mixed $guid
@@ -921,6 +944,9 @@ class User extends \ElggUser
 
         $export['eth_wallet'] = $this->getEthWallet() ?: '';
         $export['rating'] = $this->getRating();
+
+        $export['hide_share_buttons'] = $this->getHideShareButtons();
+        $export['disable_autoplay_videos'] = $this->getDisableAutoplayVideos();
 
         return $export;
     }
@@ -1194,7 +1220,6 @@ class User extends \ElggUser
         return array_merge(parent::getExportableValues(), [
             'website',
             'briefdescription',
-            'dob',
             'gender',
             'city',
             'merchant',
@@ -1227,6 +1252,8 @@ class User extends \ElggUser
             'toaster_notifications',
             'mode',
             'btc_address',
+            'surge_token',
+            'hide_share_buttons',
         ]);
     }
 
@@ -1352,6 +1379,28 @@ class User extends \ElggUser
     }
 
     /**
+     * Returns if video autoplay is disabled
+     *
+     * @return bool true if autoplay videos is enabled
+     */
+    public function getDisableAutoplayVideos()
+    {
+        return (bool) $this->disable_autoplay_videos;
+    }
+
+    /**
+     * Set on/off disable autoplay videos.
+     *
+     * @return User
+     */
+    public function setDisableAutoplayVideos($disabled = false)
+    {
+        $this->disable_autoplay_videos = $disabled ? 1 : 0;
+
+        return $this;
+    }
+
+    /**
      * Returns channel mode value.
      *
      * @return int channel mode
@@ -1392,6 +1441,28 @@ class User extends \ElggUser
     {
         $this->btc_address = (string) $btc_address;
 
+        return $this;
+    }
+
+    /**
+     * Gets the Surge Token of the user for push notifications.
+     *
+     * @return string Token.
+     */
+    public function getSurgeToken(): string
+    {
+        return (string) $this->surge_token ?? '';
+    }
+
+    /**
+     * Sets the Surge Token of the user for push notifications.
+     *
+     * @param string $token - the token string.
+     * @return User instance of $this for chaining.
+     */
+    public function setSurgeToken(string $token = ''): User
+    {
+        $this->surge_token = $token;
         return $this;
     }
 }
