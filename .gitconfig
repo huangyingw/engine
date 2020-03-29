@@ -6,7 +6,7 @@
     silent = false
     async = false
 [remote "Minds"]
-    url = https://gitlab.com/Minds/engine
+    url = https://gitlab.com/minds/engine.git
     fetch = +refs/heads/*:refs/remotes/Minds/*
 [push]
     remote = origin
