@@ -40,28 +40,26 @@ RUN apk add --no-cache --virtual build-deps \
 ENV MAKEFLAGS -j4
 ENV INSTALL_DIR /usr/src/datastax-php-driver
 ENV BUILD_DEPS \
+    autoconf \
     bash \
     cmake \
-    autoconf \
     g++ \
     gcc \
-    make \
-    pcre-dev \
-    libuv-dev \
     git \
     gmp-dev \
-    autoconf \
     libtool \
+    libuv-dev \
+    make \
     openssl-dev \
+    pcre-dev \
     zlib-dev \
-    $PHPIZE_DEPS
 
 RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
     && apk add --no-cache libuv gmp \
     && git clone https://github.com/datastax/php-driver.git $INSTALL_DIR \
     && cd $INSTALL_DIR \
     && git submodule update --init \
-    && cd ext && bash $INSTALL_DIR/ext/install.sh \
+    && cd ext && ./install.sh \
     && docker-php-ext-enable cassandra \
     && apk del build-deps \
     && rm -rf $INSTALL_DIR
