@@ -261,7 +261,6 @@ class newsfeed implements Interfaces\Api
     {
         Factory::isLoggedIn();
         $save = new Save();
-
         //factory::authorize();
         switch ($pages[0]) {
             case 'remind':
@@ -484,6 +483,7 @@ class newsfeed implements Interfaces\Api
                         $activityMutation->setNsfw($_POST['nsfw']);
                     }
 
+                    // TODO: remove this when new paywall is released
                     if (isset($_POST['wire_threshold'])) {
                         if (is_array($_POST['wire_threshold']) && ($_POST['wire_threshold']['min'] <= 0 || !$_POST['wire_threshold']['type'])) {
                             return Factory::response([
@@ -522,6 +522,11 @@ class newsfeed implements Interfaces\Api
 
                     if (isset($_POST['video_poster'])) {
                         $activityMutation->setVideoPosterBase64Blob($_POST['video_poster']);
+                    }
+
+                    if (isset($_POST['access_id'])) {
+                        error_log("accessId is: ".$_POST['access_id']);
+                        $activityMutation->setAccessId($_POST['access_id']);
                     }
 
                     // Update the entity
@@ -578,15 +583,10 @@ class newsfeed implements Interfaces\Api
                 }
 
                 if (isset($_POST['wire_threshold']) && $_POST['wire_threshold']) {
-                    if (is_array($_POST['wire_threshold']) && ($_POST['wire_threshold']['min'] <= 0 || !$_POST['wire_threshold']['type'])) {
-                        return Factory::response([
-                            'status' => 'error',
-                            'message' => 'Invalid Wire threshold'
-                        ]);
-                    }
-
                     $activity->setWireThreshold($_POST['wire_threshold']);
-                    $activity->setPayWall(true);
+
+                    $paywallDelegate = new Core\Feeds\Activity\Delegates\PaywallDelegate();
+                    $paywallDelegate->onAdd($activity);
                 }
 
                 $container = null;
@@ -621,39 +621,40 @@ class newsfeed implements Interfaces\Api
 
                 $entityGuid = $_POST['entity_guid'] ?? $_POST['attachment_guid'] ?? null;
                 $url = $_POST['url'] ?? null;
+                
+                try {
+                    if ($entityGuid && !$url) {
+                        // Attachment
 
-                if ($entityGuid && !$url) {
-                    // Attachment
+                        if ($_POST['title'] ?? null) {
+                            $activity->setTitle($_POST['title']);
+                        }
 
-                    if ($_POST['title'] ?? null) {
-                        $activity->setTitle($_POST['title']);
+                        // Sets the attachment
+                        $activity = (new Core\Feeds\Activity\Delegates\AttachmentDelegate())
+                            ->setActor(Core\Session::getLoggedinUser())
+                            ->onCreate($activity, (string) $entityGuid);
+                    } elseif (!$entityGuid && $url) {
+                        // Set-up rich embed
+
+                        $activity
+                            ->setTitle(rawurldecode($_POST['title']))
+                            ->setBlurb(rawurldecode($_POST['description']))
+                            ->setURL(rawurldecode($_POST['url']))
+                            ->setThumbnail($_POST['thumbnail']);
+                    } else {
+                        // TODO: Handle immutable embeds (like blogs, which have an entity_guid and a URL)
+                        // These should not appear naturally when creating, but might be implemented in the future.
                     }
 
-                    // Sets the attachment
-                    $activity = (new Core\Feeds\Activity\Delegates\AttachmentDelegate())
-                        ->setActor(Core\Session::getLoggedinUser())
-                        ->onCreate($activity, (string) $entityGuid);
-                } elseif (!$entityGuid && $url) {
-                    // Set-up rich embed
+                    // TODO: Move this to Core/Feeds/Activity/Manager
+  
+                    if ($_POST['video_poster'] ?? null) {
+                        $activity->setVideoPosterBase64Blob($_POST['video_poster']);
+                        $videoPosterDelegate = new Core\Feeds\Activity\Delegates\VideoPosterDelegate();
+                        $videoPosterDelegate->onAdd($activity);
+                    }
 
-                    $activity
-                        ->setTitle(rawurldecode($_POST['title']))
-                        ->setBlurb(rawurldecode($_POST['description']))
-                        ->setURL(rawurldecode($_POST['url']))
-                        ->setThumbnail($_POST['thumbnail']);
-                } else {
-                    // TODO: Handle immutable embeds (like blogs, which have an entity_guid and a URL)
-                    // These should not appear naturally when creating, but might be implemented in the future.
-                }
-
-                // TODO: Move this to Core/Feeds/Activity/Manager
-                if ($_POST['video_poster'] ?? null) {
-                    $activity->setVideoPosterBase64Blob($_POST['video_poster']);
-                    $videoPosterDelegate = new Core\Feeds\Activity\Delegates\VideoPosterDelegate();
-                    $videoPosterDelegate->onAdd($activity);
-                }
-
-                try {
                     $guid = $save->setEntity($activity)->save();
                 } catch (\Exception $e) {
                     return Factory::response([

@@ -21,7 +21,6 @@ class thumbnail extends Core\page implements Interfaces\page
             exit;
         }
 
-        Core\Security\ACL::$ignore = true;
         $guid = $pages[0] ?? null;
 
         if (!$guid) {
@@ -29,6 +28,14 @@ class thumbnail extends Core\page implements Interfaces\page
                 'status' => 'error',
                 'message' => 'guid must be provided'
             ]);
+        }
+
+        $signedUri = new Core\Security\SignedUri();
+        $req = \Zend\Diactoros\ServerRequestFactory::fromGlobals();
+        if ($req->getQueryParams()['jwtsig'] ?? null) {
+            if ($signedUri->confirm((string) $req->getUri())) {
+                Core\Security\ACL::$ignore = true;
+            }
         }
 
         $size = isset($pages[1]) ? $pages[1] : null;
@@ -44,20 +51,12 @@ class thumbnail extends Core\page implements Interfaces\page
 
         $featuresManager = new FeaturesManager;
 
-        if ($entity->access_id !== Common\Access::PUBLIC && $featuresManager->has('cdn-jwt')) {
-            $signedUri = new Core\Security\SignedUri();
-            $uri = (string) \Zend\Diactoros\ServerRequestFactory::fromGlobals()->getUri();
-            if (!$signedUri->confirm($uri)) {
-                exit;
-            }
-        }
-
         /** @var Core\Media\Thumbnails $mediaThumbnails */
         $mediaThumbnails = Di::_()->get('Media\Thumbnails');
 
 
-        $thumbnail = $mediaThumbnails->get($entity, $size);
-
+        $thumbnail = $mediaThumbnails->get($entity, $size, [ 'bypassPaywall' => true ]);
+ 
         if ($thumbnail instanceof \ElggFile) {
             $thumbnail->open('read');
             $contents = $thumbnail->read();
@@ -67,6 +66,25 @@ class thumbnail extends Core\page implements Interfaces\page
                 $thumbnail = $mediaThumbnails->get($pages[0], null);
                 $thumbnail->open('read');
                 $contents = $thumbnail->read();
+            }
+
+            // Blur the image if paywalled
+            // TODO: Consider moving this logic to a new controller
+
+            $paywallManager = Di::_()->get('Wire\Paywall\Manager');
+            
+            if ($paywallManager->isPaywalled($entity)) {
+                $allowed = $paywallManager
+                    ->setUser(Core\Session::getLoggedInUser())
+                    ->isAllowed($entity);
+                $unlock = $_GET['unlock_paywall'] ?? false;
+    
+                if (!($unlock && $allowed)) {
+                    $imagick = new \Imagick();
+                    $imagick->readImageBlob($contents);
+                    $imagick->blurImage(100, 500);
+                    $contents = $imagick->getImageBlob();
+                }
             }
 
             try {
