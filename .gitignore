@@ -29,3 +29,4 @@ coverage
 composer.phar
 settings.php-*.bak
 !/.gitattributes
+cassandra.log

@@ -1,38 +1,21 @@
+diff --git a/.gitignore b/.gitignore
+index 910f446d..5373bc8a 100644
+--- ./.gitignore
++++ ./.gitignore
+@@ -29,3 +29,4 @@ coverage
+ composer.phar
+ settings.php-*.bak
+ !/.gitattributes
++cassandra.log
 diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
-index 301ea701..5e091a43 100644
+index bb0d0a5e..b540d8e1 100644
 --- ./containers/php/Dockerfile
 +++ ./containers/php/Dockerfile
-@@ -40,28 +40,26 @@ RUN apk add --no-cache --virtual build-deps \
- ENV MAKEFLAGS -j4
- ENV INSTALL_DIR /usr/src/datastax-php-driver
- ENV BUILD_DEPS \
-+    autoconf \
-     bash \
-     cmake \
--    autoconf \
-     g++ \
-     gcc \
--    make \
--    pcre-dev \
--    libuv-dev \
-     git \
-     gmp-dev \
--    autoconf \
-     libtool \
-+    libuv-dev \
-+    make \
-     openssl-dev \
-+    pcre-dev \
-     zlib-dev \
--    $PHPIZE_DEPS
+@@ -1,6 +1,6 @@
+ FROM php:7.3-fpm-alpine3.10
  
- RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
-     && apk add --no-cache libuv gmp \
-     && git clone https://github.com/datastax/php-driver.git $INSTALL_DIR \
-     && cd $INSTALL_DIR \
-     && git submodule update --init \
--    && cd ext && bash $INSTALL_DIR/ext/install.sh \
-+    && cd ext && ./install.sh \
-     && docker-php-ext-enable cassandra \
-     && apk del build-deps \
-     && rm -rf $INSTALL_DIR
+-RUN apk add --no-cache --update php-deps make
++RUN apk add --no-cache --update make
+ 
+ RUN apk add --no-cache --virtual build-deps \
+     libzip-dev \

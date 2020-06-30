@@ -1,6 +1,6 @@
 FROM php:7.3-fpm-alpine3.10
 
-RUN apk add --no-cache --update php-deps make
+RUN apk add --no-cache --update make
 
 RUN apk add --no-cache --virtual build-deps \
     libzip-dev \
@@ -58,6 +58,7 @@ ENV BUILD_DEPS \
     libtool \
     openssl-dev \
     zlib-dev \
+    $PHPIZE_DEPS
 
 RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
     && apk add --no-cache libuv gmp \
