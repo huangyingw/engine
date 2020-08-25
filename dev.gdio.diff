@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index 910f446d..5373bc8a 100644
+index 910f446d9..5373bc8a7 100644
 --- ./.gitignore
 +++ ./.gitignore
 @@ -29,3 +29,4 @@ coverage
@@ -8,7 +8,7 @@ index 910f446d..5373bc8a 100644
  !/.gitattributes
 +cassandra.log
 diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
-index bb0d0a5e..b540d8e1 100644
+index bb0d0a5ec..b540d8e1a 100644
 --- ./containers/php/Dockerfile
 +++ ./containers/php/Dockerfile
 @@ -1,6 +1,6 @@
