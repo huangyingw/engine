@@ -40,15 +40,26 @@ class Balance
      */
     public function get(): BigNumber
     {
-        $this->onchainBalance->setUser($this->user);
-        $onChainBalanceVal = BigNumber::_($this->onchainBalance->get());
+        // $this->onchainBalance->setUser($this->user);
+        // $onChainBalanceVal = BigNumber::_($this->onchainBalance->get());
 
 
         $this->offchainBalance->setUser($this->user);
         $offChainBalanceVal = BigNumber::_($this->offchainBalance->get());
-        
-        return $onChainBalanceVal
-            ? $onChainBalanceVal->add($offChainBalanceVal)
-            : $offChainBalanceVal;
+
+        // return $onChainBalanceVal
+        //     ? $onChainBalanceVal->add($offChainBalanceVal)
+        //     : $offChainBalanceVal;
+        return $offChainBalanceVal;
+    }
+
+    /**
+     * Return a count of transactions
+     * @return int
+     */
+    public function count(): int
+    {
+        $this->offchainBalance->setUser($this->user);
+        return $this->offchainBalance->count();
     }
 }

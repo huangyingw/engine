@@ -55,7 +55,7 @@ class channel implements Interfaces\Api
             ]);
         }
 
-        if ($user->enabled != "yes") {
+        if ($user->enabled != "yes" && !Core\Session::isAdmin()) {
             return Factory::response([
                 'status'=>'error',
                 'message'=>'Sorry, this user is disabled',
@@ -149,6 +149,10 @@ class channel implements Interfaces\Api
                 $response['channel']['pro_settings'] = $proSettings;
             }
         }
+
+        $response['require_login'] = !$isLoggedIn && Di::_()->get('Blockchain\Wallets\Balance')
+            ->setUser($user)
+            ->count() === 0;
 
         return Factory::response($response);
     }

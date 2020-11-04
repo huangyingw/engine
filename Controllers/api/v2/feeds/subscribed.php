@@ -78,9 +78,17 @@ class subscribed implements Interfaces\Api
         $asActivities = (bool) ($_GET['as_activities'] ?? true);
 
         $query = null;
-
         if (isset($_GET['query'])) {
             $query = $_GET['query'];
+        }
+
+        $nsfw = null;
+        if (isset($_GET['nsfw'])) {
+            if (is_array($_GET['nsfw'])) {
+                $nsfw = $_GET['nsfw'];
+            } else {
+                $nsfw = explode(',', $$_GET['nsfw'] ?? '');
+            }
         }
 
         $custom_type = isset($_GET['custom_type']) && $_GET['custom_type'] ? [$_GET['custom_type']] : null;
@@ -104,9 +112,15 @@ class subscribed implements Interfaces\Api
             'sync' => $sync,
             'from_timestamp' => $fromTimestamp,
             'query' => $query ?? null,
-            'nsfw' => null,
+            'nsfw' => $nsfw,
             'single_owner_threshold' => 0,
+            'portrait' => isset($_GET['portrait']),
+            'hide_own_posts' => isset($_GET['hide_own_posts'])
         ];
+
+        if ($_GET['to_timestamp'] ?? null) {
+            $opts['to_timestamp'] = (int) $_GET['to_timestamp'] * 1000;
+        }
 
         try {
             $result = $manager->getList($opts);

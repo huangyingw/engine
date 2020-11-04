@@ -76,6 +76,8 @@ class ManagerSpec extends ObjectBehavior
             ->willReturn(null);
         $account->getPersonalIdNumber()
             ->willReturn(null);
+        $account->getPayoutInterval()
+            ->willReturn('monthly');
         $account->getEmail()
             ->willReturn('test@minds.com');
         $account->getUrl()
@@ -292,5 +294,10 @@ class ManagerSpec extends ObjectBehavior
 
         $account = $this->getByUser($user);
         $account->shouldBe(null);
+    }
+
+    public function it_should_get_application_fees()
+    {
+        $this->getApplicationFees([ 'from' => time() ]);
     }
 }
