@@ -1,0 +1,21 @@
+diff --git a/.gitignore b/.gitignore
+index 910f446d9..5373bc8a7 100644
+--- ./.gitignore
++++ ./.gitignore
+@@ -29,3 +29,4 @@ coverage
+ composer.phar
+ settings.php-*.bak
+ !/.gitattributes
++cassandra.log
+diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
+index bb0d0a5ec..b540d8e1a 100644
+--- ./containers/php/Dockerfile
++++ ./containers/php/Dockerfile
+@@ -1,6 +1,6 @@
+ FROM php:7.3-fpm-alpine3.10
+ 
+-RUN apk add --no-cache --update php-deps make
++RUN apk add --no-cache --update make
+ 
+ RUN apk add --no-cache --virtual build-deps \
+     libzip-dev \
