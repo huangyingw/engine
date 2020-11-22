@@ -10,7 +10,7 @@ RUN rm -f /var/www/Minds/engine/settings.php
 
 # Setup our supervisor service
 
-RUN apk add --no-cache \
+RUN apk add  \
         supervisor&& \
     mkdir /etc/supervisor && \
     mkdir /etc/supervisor/conf.d
