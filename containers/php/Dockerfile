@@ -1,15 +1,15 @@
 FROM php:7.3-fpm-alpine3.10
 
-RUN apk add --no-cache --update make
+RUN apk add  --update make
 
-RUN apk add --no-cache --virtual build-deps \
+RUN apk add  --virtual build-deps \
     libzip-dev \
     zlib-dev \
     freetype-dev \
     libjpeg-turbo-dev \
     libpng-dev \
     $PHPIZE_DEPS \
-    && apk add --no-cache \
+    && apk add  \
     libzip \
     coreutils \
     imagemagick \
@@ -27,7 +27,7 @@ RUN apk add --no-cache --virtual build-deps \
     && apk del build-deps
 
 # PECL Extensions
-RUN apk add --no-cache --virtual build-deps \
+RUN apk add  --virtual build-deps \
     $PHPIZE_DEPS \
     imagemagick-dev \
     && pecl install mongodb \
@@ -60,8 +60,8 @@ ENV BUILD_DEPS \
     zlib-dev \
     $PHPIZE_DEPS
 
-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
-    && apk add --no-cache libuv gmp \
+RUN apk add  --virtual build-deps $BUILD_DEPS \
+    && apk add  libuv gmp \
     && git clone https://github.com/datastax/php-driver.git $INSTALL_DIR \
     && cd $INSTALL_DIR \
     && git reset --hard f73debf39e395817dd2ced76acfc64249d4d3a0a \
@@ -73,11 +73,11 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
 
 # ZMQ extension
 ENV INSTALL_DIR /usr/src/php-zmq
-RUN apk add --no-cache --virtual build-deps \
+RUN apk add  --virtual build-deps \
     zeromq-dev \
     git \
     $PHPIZE_DEPS \
-    && apk add --no-cache zeromq \
+    && apk add  zeromq \
     && git clone https://github.com/zeromq/php-zmq.git $INSTALL_DIR \
     && cd $INSTALL_DIR \
     && phpize \
@@ -90,7 +90,7 @@ RUN apk add --no-cache --virtual build-deps \
 
 # Install awscli (downstream containers require for the moment)
 
-RUN apk update && apk add --no-cache py-pip && pip install --upgrade pip && pip install awscli
+RUN apk update && apk add  py-pip && pip install --upgrade pip && pip install awscli
 
 # PHP INI
 COPY php.ini /usr/local/etc/php/
