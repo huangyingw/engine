@@ -11,7 +11,7 @@ ADD --chown=www-data . /var/www/Minds/engine
 
 # Install awscli
 
-RUN apk update && pecl install xdebug && docker-php-ext-enable xdebug && apk add --no-cache py-pip && pip install --upgrade pip && pip install awscli
+RUN apk update && pecl install xdebug && docker-php-ext-enable xdebug && apk add  py-pip && pip install --upgrade pip && pip install awscli
 
 # Copy config
 
