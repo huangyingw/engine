@@ -7,6 +7,57 @@ index 910f446d..5373bc8a 100644
  settings.php-*.bak
  !/.gitattributes
 +cassandra.log
+diff --git a/containers/installer/Dockerfile b/containers/installer/Dockerfile
+index 392d9af7..a7fa22b7 100644
+--- ./containers/installer/Dockerfile
++++ ./containers/installer/Dockerfile
+@@ -1,6 +1,6 @@
+ FROM minds/php:7.3
+ 
+-RUN apk update && apk add --no-cache --update git
++RUN apk update && apk add  --update git
+ 
+ COPY containers/installer/install.sh install.sh
+ 
+diff --git a/containers/php-coverage/Dockerfile b/containers/php-coverage/Dockerfile
+index b1f7e330..3dcdc1bb 100644
+--- ./containers/php-coverage/Dockerfile
++++ ./containers/php-coverage/Dockerfile
+@@ -11,7 +11,7 @@ ADD --chown=www-data . /var/www/Minds/engine
+ 
+ # Install awscli
+ 
+-RUN apk update && pecl install xdebug && docker-php-ext-enable xdebug && apk add --no-cache py-pip && pip install --upgrade pip && pip install awscli
++RUN apk update && pecl install xdebug && docker-php-ext-enable xdebug && apk add  py-pip && pip install --upgrade pip && pip install awscli
+ 
+ # Copy config
+ 
+diff --git a/containers/php-guid/Dockerfile b/containers/php-guid/Dockerfile
+index b4f7d8f9..d5083fae 100644
+--- ./containers/php-guid/Dockerfile
++++ ./containers/php-guid/Dockerfile
+@@ -10,7 +10,7 @@ RUN rm -f /var/www/Minds/engine/settings.php
+ 
+ # Setup our supervisor service
+ 
+-RUN apk add --no-cache \
++RUN apk add  \
+         supervisor&& \
+     mkdir /etc/supervisor && \
+     mkdir /etc/supervisor/conf.d
+diff --git a/containers/php-runners/Dockerfile b/containers/php-runners/Dockerfile
+index 0e22372e..f91d0b6c 100644
+--- ./containers/php-runners/Dockerfile
++++ ./containers/php-runners/Dockerfile
+@@ -10,7 +10,7 @@ ADD --chown=www-data . /var/www/Minds/engine
+ 
+ # Setup our supervisor service
+ 
+-RUN apk add --no-cache \
++RUN apk add  \
+         supervisor&& \
+     mkdir /etc/supervisor && \
+     mkdir /etc/supervisor/conf.d
 diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
 index bb0d0a5e..ac6f18e6 100644
 --- ./containers/php/Dockerfile
@@ -73,3 +124,16 @@ index bb0d0a5e..ac6f18e6 100644
  
  # PHP INI
  COPY php.ini /usr/local/etc/php/
+diff --git a/containers/transcoder/Dockerfile b/containers/transcoder/Dockerfile
+index dad73cd6..64ffebf8 100644
+--- ./containers/transcoder/Dockerfile
++++ ./containers/transcoder/Dockerfile
+@@ -10,7 +10,7 @@ RUN rm -f /var/www/Minds/engine/settings.php
+ 
+ # Setup our supervisor service
+ 
+-RUN apk add --no-cache \
++RUN apk add  \
+         supervisor&& \
+     mkdir /etc/supervisor && \
+     mkdir /etc/supervisor/conf.d
