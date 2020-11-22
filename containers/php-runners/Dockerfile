@@ -10,7 +10,7 @@ ADD --chown=www-data . /var/www/Minds/engine
 
 # Setup our supervisor service
 
-RUN apk add --no-cache \
+RUN apk add  \
         supervisor&& \
     mkdir /etc/supervisor && \
     mkdir /etc/supervisor/conf.d
