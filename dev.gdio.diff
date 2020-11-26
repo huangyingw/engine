@@ -59,14 +59,14 @@ index 0e22372e..f91d0b6c 100644
      mkdir /etc/supervisor && \
      mkdir /etc/supervisor/conf.d
 diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
-index bb0d0a5e..ac6f18e6 100644
+index bb0d0a5e..8f23a6d9 100644
 --- ./containers/php/Dockerfile
 +++ ./containers/php/Dockerfile
 @@ -1,15 +1,15 @@
  FROM php:7.3-fpm-alpine3.10
  
 -RUN apk add --no-cache --update php-deps make
-+RUN apk add  --update make
++RUN apk add --update make
  
 -RUN apk add --no-cache --virtual build-deps \
 +RUN apk add  --virtual build-deps \
