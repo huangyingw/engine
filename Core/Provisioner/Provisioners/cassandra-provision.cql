@@ -1,3 +1,91 @@
+DROP KEYSPACE IF EXISTS minds;
+DROP TABLE IF EXISTS minds.post_subscriptions;
+DROP TABLE IF EXISTS minds.email_subscriptions;
+DROP TABLE IF EXISTS minds.wire;
+DROP MATERIALIZED VIEW IF EXISTS minds.wire_by_sender 
+DROP MATERIALIZED VIEW IF EXISTS minds.wire_by_entity 
+DROP TABLE IF EXISTS minds.token_purchases;
+DROP TABLE IF EXISTS minds.blockchain_transactions;
+DROP MATERIALIZED VIEW IF EXISTS minds.blockchain_transactions_by_tx 
+DROP MATERIALIZED VIEW IF EXISTS minds.blockchain_transactions_by_address 
+DROP TABLE IF EXISTS minds.entities_by_time;
+DROP TABLE IF EXISTS minds.session;
+DROP TABLE IF EXISTS minds.contributions;
+DROP MATERIALIZED VIEW IF EXISTS minds.contributions_by_timestamp 
+DROP TABLE IF EXISTS minds.boosts;
+DROP MATERIALIZED VIEW IF EXISTS minds.boosts_by_mongo_id 
+DROP MATERIALIZED VIEW IF EXISTS minds.boosts_by_destination 
+DROP MATERIALIZED VIEW IF EXISTS minds.boosts_by_owner 
+DROP TABLE IF EXISTS minds.blockchain_pending;
+DROP TABLE IF EXISTS minds.trending;
+DROP TABLE IF EXISTS minds.jwt_sessions;
+DROP TABLE IF EXISTS minds.comments;
+DROP TABLE IF EXISTS minds.recurring_subscriptions;
+DROP TABLE IF EXISTS minds.entities;
+DROP TABLE IF EXISTS minds.blockchain_transactions_mainnet;
+DROP MATERIALIZED VIEW IF EXISTS minds.blockchain_transactions_mainnet_by_tx 
+DROP MATERIALIZED VIEW IF EXISTS minds.blockchain_transactions_mainnet_by_address 
+DROP TABLE IF EXISTS minds.config;
+DROP TABLE IF EXISTS minds.pledges;
+DROP TABLE IF EXISTS minds.counters;
+DROP TABLE IF EXISTS minds.relationships;
+DROP TABLE IF EXISTS minds.monetization_ledger;
+DROP TABLE IF EXISTS minds.rewards;
+DROP TABLE IF EXISTS minds.oauth_access_tokens;
+DROP TABLE IF EXISTS minds.plans;
+DROP MATERIALIZED VIEW IF EXISTS minds.plans_by_subscription_id 
+DROP MATERIALIZED VIEW IF EXISTS minds.plans_by_user_guid 
+DROP TABLE IF EXISTS minds.subscriptions;
+DROP MATERIALIZED VIEW IF EXISTS minds.subscriptions_by_id 
+DROP MATERIALIZED VIEW IF EXISTS minds.subscriptions_by_user_guid 
+DROP TABLE IF EXISTS minds.translations;
+DROP TABLE IF EXISTS minds.notifications;
+DROP MATERIALIZED VIEW IF EXISTS minds.notifications_by_type_group 
+DROP TABLE IF EXISTS minds.friendsof;
+DROP TABLE IF EXISTS minds.withholdings;
+DROP TABLE IF EXISTS minds.user_index_to_guid;
+DROP TABLE IF EXISTS minds.withdrawals;
+DROP TABLE IF EXISTS minds.friends;
+DROP TABLE IF EXISTS minds.annotation;
+DROP TABLE IF EXISTS minds.categories;
+DROP TABLE IF EXISTS minds.blockchain_transactions2;
+DROP TABLE IF EXISTS minds.locks;
+DROP TABLE IF EXISTS minds.reports;
+DROP MATERIALIZED VIEW IF EXISTS minds.reports_by_state 
+DROP MATERIALIZED VIEW IF EXISTS minds.reports_by_owner 
+DROP TABLE IF EXISTS minds."token"
+DROP TABLE IF EXISTS minds.payments;
+DROP TABLE IF EXISTS minds.oauth_refresh_tokens;
+DROP TABLE IF EXISTS minds.newsfeed;
+DROP TABLE IF EXISTS minds.trending2;
+DROP TABLE IF EXISTS minds.user;
+DROP TABLE IF EXISTS minds.spam_blocks;
+DROP TABLE IF EXISTS minds.user_hashtags;
+DROP TABLE IF EXISTS minds.video_chat_leases;
+DROP TABLE IF EXISTS minds.sendwyre_accounts;
+DROP TABLE IF EXISTS minds.analytics_graphs;
+DROP TABLE IF EXISTS minds.views;
+DROP TABLE IF EXISTS minds.update_markers;
+DROP TABLE IF EXISTS minds.hidden_hashtags;
+DROP TABLE IF EXISTS minds.referrals;
+DROP TABLE IF EXISTS minds.search_dispatcher_queue;
+DROP TABLE IF EXISTS minds.user_snapshots;
+DROP TABLE IF EXISTS minds.email_campaign_logs;
+DROP TABLE IF EXISTS minds.moderation_reports;
+DROP MATERIALIZED VIEW IF EXISTS minds.moderation_reports_by_entity_owner_guid 
+DROP MATERIALIZED VIEW IF EXISTS minds.moderation_reports_by_state 
+DROP TABLE IF EXISTS minds.moderation_strikes;
+DROP TABLE IF EXISTS minds.moderation_summons;
+DROP TABLE IF EXISTS minds.pro;
+DROP MATERIALIZED VIEW IF EXISTS minds.pro_by_domain 
+DROP TABLE IF EXISTS minds.subscription_requests;
+DROP TABLE IF EXISTS minds.notification_batches;
+DROP TABLE IF EXISTS minds.experiments;
+DROP MATERIALIZED VIEW IF EXISTS minds.withdrawals_by_status 
+DROP TABLE IF EXISTS minds.video_transcodes;
+DROP TABLE IF EXISTS minds.feature_toggles_cache_ns;
+DROP TABLE IF EXISTS minds.wire_support_tier;
+
 CREATE KEYSPACE minds WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  AND durable_writes = true;
 
 CREATE TABLE minds.post_subscriptions (
