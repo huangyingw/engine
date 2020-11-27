@@ -53,7 +53,7 @@ DROP TABLE IF EXISTS minds.locks;
 DROP TABLE IF EXISTS minds.reports;
 DROP MATERIALIZED VIEW IF EXISTS minds.reports_by_state;
 DROP MATERIALIZED VIEW IF EXISTS minds.reports_by_owner;
-DROP TABLE IF EXISTS minds."token"
+DROP TABLE IF EXISTS minds."token";
 DROP TABLE IF EXISTS minds.payments;
 DROP TABLE IF EXISTS minds.oauth_refresh_tokens;
 DROP TABLE IF EXISTS minds.newsfeed;
