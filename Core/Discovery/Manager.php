@@ -262,9 +262,9 @@ class Manager
             'plus' => false,
         ], $opts);
 
-        if ($opts['plus'] === true) {
-            $opts['hoursAgo'] = 1680; // 10 Weeks
-        }
+        // if ($opts['plus'] === true) {
+        //     $opts['hoursAgo'] = 1680; // 10 Weeks
+        // }
 
         $type = 'activity';
 
@@ -296,6 +296,14 @@ class Manager
                 'range' => [
                     'comments:count' => [
                         'gte' => 1,
+                    ]
+                ]
+            ];
+        } else {
+            $must[] = [
+                'range' => [
+                    'votes:up' => [
+                        'gte' => 2,
                     ]
                 ]
             ];
