@@ -479,7 +479,7 @@ class Manager
                 if (!$entity->description) {
                     continue; // We have nothing to create title or description here, so skip it
                 }
-                $title = strlen($entity->description) > 60 ? substr($entity->description, 0, 60) . '...' : $entity->description;
+                $title = strlen($entity->description) > 60 ? mb_substr($entity->description, 0, 60) . '...' : $entity->description;
             }
 
             // If still no title, then skip
@@ -564,6 +564,7 @@ class Manager
             'period' => '1y',
             'query' => $query,
             'plus' => $opts['plus'],
+            'single_owner_threshold' => $filter === 'latest' ? 0 : 24
         ]);
 
         $rows = $this->elasticFeedsManager->getList($opts);
