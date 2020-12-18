@@ -64,20 +64,20 @@ class Plus2020_10_28 extends EmailCampaign
         $this->template->set('preheader', "");
         $this->template->set('tracking', http_build_query($tracking));
         
-        // Send a push
-        $title = "Start your free trial today";
-        $message = "Minds+ now has revenue-sharing. Start your free trial today.💡";
-        QueueClient::build()
-                ->setQueue('Push')
-                ->send([
-                'user_guid' => $this->user->getGuid(),
-                'uri' => 'notification',
-                'title' => $title,
-                'message' => $message,
-            ]);
+        // // Send a push
+        // $title = "The new Minds+ is here";
+        // $message = "Minds+ now has revenue-sharing. Start your free trial today.💡";
+        // QueueClient::build()
+        //         ->setQueue('Push')
+        //         ->send([
+        //         'user_guid' => $this->user->getGuid(),
+        //         'uri' => 'notification',
+        //         'title' => $title,
+        //         'message' => $message,
+        //     ]);
    
         $actionButton = (new ActionButton())
-            ->setLabel('Start your free trial today.')
+            ->setLabel('Start your free trial today')
             ->setPath('plus?'.http_build_query($tracking));
 
         $this->template->set('actionButton', $actionButton->build());
