@@ -21,8 +21,8 @@ class Installer
     {
         $this->defaults = [
             'domain' => 'http://localhost:8080',
-            'username' => 'admin',
-            'password' => '123456',
+            'username' => 'minds',
+            'password' => 'Pa$$w0rd',
             'development_mode' => true,
             'admin-email' => 'minds@minds.com',
             'email-private-key' => '/.dev/minds.pem',
