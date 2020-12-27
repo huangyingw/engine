@@ -7,21 +7,6 @@ index 910f446d..5373bc8a 100644
  settings.php-*.bak
  !/.gitattributes
 +cassandra.log
-diff --git a/Core/Provisioner/Installer.php b/Core/Provisioner/Installer.php
-index 21190d00..3493c3d9 100644
---- ./Core/Provisioner/Installer.php
-+++ ./Core/Provisioner/Installer.php
-@@ -21,8 +21,8 @@ class Installer
-     {
-         $this->defaults = [
-             'domain' => 'http://localhost:8080',
--            'username' => 'minds',
--            'password' => 'Pa$$w0rd',
-+            'username' => 'admin',
-+            'password' => '123456',
-             'development_mode' => true,
-             'admin-email' => 'minds@minds.com',
-             'email-private-key' => '/.dev/minds.pem',
 diff --git a/containers/installer/Dockerfile b/containers/installer/Dockerfile
 index 392d9af7..a7fa22b7 100644
 --- ./containers/installer/Dockerfile
