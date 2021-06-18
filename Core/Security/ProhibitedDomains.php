@@ -299,6 +299,16 @@ class ProhibitedDomains
         'smmservicesbuy.com',
         '/psce.pw',
         '//cutt.ly',
-        '//b.link'
+        '//b.link',
+        // front#4256
+        '//www.buyserviceusa.com/',
+        '//buyserviceusa.com/',
+        '//www.localreviewshop.com/',
+        '//localreviewshop.com/',
+        '//prem.li',
+        '//shr.link',
+        '.clickbank.net',
+        '//v.ht/',
+        '//sites.google.com/',
     ];
 }

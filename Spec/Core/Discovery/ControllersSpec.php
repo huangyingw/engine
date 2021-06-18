@@ -82,7 +82,7 @@ class ControllersSpec extends ObjectBehavior
                 ->set('guid', '456'),
         ]);
 
-        $this->manager->getSearch('hello world', 'top', '', [ 'plus' => false ])
+        $this->manager->getSearch('hello world', 'top', '', [ 'plus' => false, 'nsfw' => false ])
             ->willReturn($response);
 
         $response = $this->getSearch($request);
@@ -216,7 +216,7 @@ class ControllersSpec extends ObjectBehavior
                     'entity' => null,
                     'guid' => null,
                     'hashtag' => 'music',
-                    'title' => null,
+                    'title' => "",
                     'volume' => 10,
                     'period' => 12,
                     'selected' => true,
@@ -226,7 +226,7 @@ class ControllersSpec extends ObjectBehavior
                     'entity' => null,
                     'guid' => null,
                     'hashtag' => 'art',
-                    'title' => null,
+                    'title' => "",
                     'volume' => 5,
                     'period' => 24,
                     'selected' => false,

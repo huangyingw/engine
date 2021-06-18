@@ -173,13 +173,11 @@ class Manager
 
         // Languages
 
-        if ($opts['plus'] === false) {
-            $must[] = [
-                'terms' => [
-                    'language' => $languages,
-                ]
-            ];
-        }
+        $must[] = [
+            'terms' => [
+                'language' => $languages,
+            ]
+        ];
 
         // Focus in on plus
 
@@ -275,6 +273,11 @@ class Manager
         // }
 
         $type = 'activity';
+
+        $languages = [ 'en' ];
+        if ($this->user && $this->user->getLanguage() !== 'en') {
+            $languages = [ $this->user->getLanguage(), 'en' ];
+        }
 
         $algorithm = new SortingAlgorithms\TopV2();
 
@@ -377,7 +380,7 @@ class Manager
             'weight' => 10, // videos and blogs are worth 10x
         ];
 
-        if ($this->user) {
+        if ($this->user && $opts['plus'] !== true) {
             $functions[] = [
                 'filter' => [
                     'terms' => [
@@ -385,6 +388,12 @@ class Manager
                     ]
                 ],
                 'weight' => 50, // Multiply your own language by 50x
+            ];
+        } elseif ($opts['plus'] === true) {
+            $must[] = [
+                'terms' => [
+                    'language' => $languages,
+                ],
             ];
         }
 
@@ -530,6 +539,7 @@ class Manager
         $algorithm = 'latest';
         $opts = array_merge([
             'plus' => false,
+            'nsfw' => [],
         ], $opts);
 
         switch ($type) {
@@ -566,7 +576,7 @@ class Manager
             'access_id' => 2,
             'limit' => 300,
             //'offset' => $offset,
-            'nsfw' => [],
+            'nsfw' => $opts['nsfw'],
             'type' => $type,
             'algorithm' => $algorithm,
             'period' => '1y',

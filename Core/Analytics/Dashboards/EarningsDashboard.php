@@ -77,7 +77,6 @@ class EarningsDashboard implements DashboardInterface
                 new Metrics\Earnings\TotalEarningsMetric(),
                 new Metrics\Earnings\ViewsEarningsMetric(),
                 new Metrics\Earnings\ReferralsEarningsMetric(),
-                new Metrics\Earnings\SalesEarningsMetric(),
                 new Metrics\Earnings\PlusEarningsMetric()
             )
             ->build();
@@ -96,7 +95,7 @@ class EarningsDashboard implements DashboardInterface
         return [
             'category' => 'earnings',
             'label' => 'Pro Earnings',
-            'description' => 'Earnings for Pro members will be paid out within 30 days upon reaching a minumum balance of $100.00.',
+            'description' => 'Earnings for Minds+ and Pro members will be paid out within 30 days upon reaching a minimum balance of $100.00.',
             'timespan' => $this->timespansCollection->getSelected()->getId(),
             'timespans' => $this->timespansCollection->export(),
             'metric' => $this->metricsCollection->getSelected()->getId(),

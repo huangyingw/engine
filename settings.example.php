@@ -27,6 +27,19 @@ $CONFIG->rabbitmq = [
     'password' => 'guest',
 ];
 
+$CONFIG->set('pulsar', [
+    'host' => 'pulsar',
+    'port' => 6650,
+    'ssl' => false,
+    //'ssl_cert_path' => '',
+]);
+
+$CONFIG->set('cloudflare', [
+    'api_key' => '',
+    'email' => '',
+    'account_id' => '',
+]);
+
 $CONFIG->disable_secure_cookies = true;
 
 $CONFIG->set('sessions', [
@@ -121,10 +134,19 @@ $CONFIG->set(
       'label' => 'Token manipulation',
       'hasMore' => false,
     ],
+    [
+      'value' => 17,
+      'label' => 'Security',
+      'hasMore' => true,
+      'reasons' => [
+        ['value' => 1, 'label' => 'Hacked account']
+      ],
+    ],
     ['value' => 11,
      'label' => 'Another reason',
      'hasMore' => true,
     ],
+
   ]
 );
 
@@ -349,6 +371,7 @@ $CONFIG->set('blockchain', [
             'wallet_pkey' => '',
             'limit_exemptions' => [
             ],
+            'limit' => 25000,
         ],
         'bonus' => [
             'wallet_address' => '0x461f1C5768cDB7E567A84E22b19db0eABa069BaD',
@@ -618,22 +641,24 @@ $CONFIG->set('contact_details', [
 $CONFIG->set('upgrades', [
     'pro' => [
         'monthly' => [
-            'tokens' => 240,
             'usd' => 60,
         ],
         'yearly' => [
-            'tokens' => 2400,
             'usd' => 600,
+        ],
+        'lifetime' => [
+            'tokens' => 20000
         ],
     ],
     'plus' => [
         'monthly' => [
-            'tokens' => 28,
             'usd' => 7,
         ],
         'yearly' => [
-            'tokens' => 240,
             'usd' => 60,
+        ],
+        'lifetime' => [
+            'tokens' => 2500
         ],
     ],
 ]);

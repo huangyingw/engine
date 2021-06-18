@@ -19,7 +19,9 @@ class Minds extends base
     private $modules = [
         Log\Module::class,
         Events\Module::class,
+        EventStreams\Module::class,
         Security\Module::class,
+        OAuth\Module::class,
         Features\Module::class,
         SSO\Module::class,
         Email\Module::class,
@@ -50,6 +52,13 @@ class Minds extends base
         Media\Proxy\Module::class,
         Blockchain\Module::class,
         Boost\Module::class,
+        Rewards\Module::class,
+        Media\Video\CloudflareStreams\Module::class,
+        Matrix\Module::class,
+        Sessions\Module::class,
+        Register\Module::class,
+        Notifications\Module::class,
+        Votes\Module::class,
     ];
 
     /**
@@ -99,8 +108,6 @@ class Minds extends base
         (new \Minds\Entities\EntitiesProvider())->register();
         (new Config\ConfigProvider())->register();
         (new Router\RouterProvider())->register();
-        (new OAuth\OAuthProvider())->register();
-        (new Sessions\SessionsProvider())->register();
         (new Data\DataProvider())->register();
         //(new Core\Notification\NotificationProvider())->register();
         (new Pages\PagesProvider())->register();
@@ -118,13 +125,12 @@ class Minds extends base
         (new Notification\NotificationProvider())->register();
         (new Groups\GroupsProvider())->register();
         (new Search\SearchProvider())->register();
-        (new Votes\VotesProvider())->register();
+        (new Comments\Provider())->register();
         (new SMS\SMSProvider())->register();
         (new Blockchain\BlockchainProvider())->register();
         (new Issues\IssuesProvider())->register();
         (new Payments\Subscriptions\SubscriptionsProvider())->register();
         (new Faq\FaqProvider())->register();
-        (new Rewards\RewardsProvider())->register();
         (new Plus\PlusProvider())->register();
         (new Pro\ProProvider())->register();
         (new Hashtags\HashtagsProvider())->register();

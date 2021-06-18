@@ -61,7 +61,8 @@ class Manager
         $this->analytics
             ->setFrom($this->from)
             ->setTo($this->to)
-            ->setInterval('day');
+            ->setInterval('day')
+            ->setOnlyPlus(true);
 
         if ($this->user) {
             $this->analytics
@@ -160,5 +161,14 @@ class Manager
         $tokensPerScore = BigNumber::_(pi())->mul(10 ** 18)->div(200);
         $tokens = BigNumber::_($this->getUserContributionScore())->mul($tokensPerScore);
         return (string) $tokens;
+    }
+
+    /**
+     * Returns contributions summaries for users
+     * @return ContributionSummary[]
+     */
+    public function getSummaries(ContributionQueryOpts $opts): iterable
+    {
+        return $this->repository->getSummaries($opts);
     }
 }

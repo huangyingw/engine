@@ -1,33 +1,43 @@
 <?php
 namespace Minds\Core\Blockchain\Uniswap;
 
+use Brick\Math\BigDecimal;
 use Minds\Core\Di\Di;
 use Minds\Core\Http;
-use Brick\Math\BigDecimal;
+use Minds\Core\Blockchain\Services\BlockFinder;
 
 class Client
 {
     /** @var Http\Curl\Json\Client */
     protected $http;
 
+    /** @var BlockFinder */
+    protected $blockFinder;
+
     /** @var string */
     protected $graphqlEndpoint = "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v2";
 
-    public function __construct($http = null)
+    public function __construct($http = null, BlockFinder $blockFinder = null)
     {
         $this->http = $http ?: Di::_()->get('Http\Json');
+        $this->blockFinder = $blockFinder ?? Di::_()->get('Blockchain\Services\BlockFinder');
     }
 
     /**
      * Returns a user with their liquidity positions
      * @param string $id
+     * @param int $asOf (optional) - Thie timestamp of the block
      * @return UniswapUserEntity
      */
-    public function getUser(string $id): UniswapUserEntity
+    public function getUser(string $id, int $asOf = null): UniswapUserEntity
     {
+        if (!$asOf) {
+            $asOf = time() - 300; // 5 minutes (give blocks time to settle)
+        }
+
         $query = '
-            query($id: String!) {
-                user(id: $id) {
+            query($id: String!, $blockNumber: Int!) {
+                user(id: $id, block: { number: $blockNumber }) {
                     id
                     liquidityPositions {
                         id
@@ -76,6 +86,7 @@ class Client
         ';
         $variables = [
             'id' => strtolower($id),
+            'blockNumber' => $this->blockFinder->getBlockByTimestamp($asOf),
         ];
 
         $response = $this->request($query, $variables);
@@ -110,16 +121,24 @@ class Client
      * @param string[] $ids
      * @return UniswapPairEntity[]
      */
-    public function getPairs(array $ids = []): array
+    public function getPairs(array $ids = [], int $asOf = null): array
     {
+        if (!$asOf) {
+            $asOf = time() - 300; // 5 minutes (give blocks time to settle)
+        }
+
         $query = '
-            query($ids: [String!]) {
-                pairs(where: { id_in: $ids }) {
+            query($ids: [String!], $blockNumber: Int!) {
+                pairs(where: { id_in: $ids }, block: { number: $blockNumber }) {
                     id
                     totalSupply
                     reserve0
                     reserve1
                     reserveUSD
+                    volumeToken0
+                    volumeToken1
+                    volumeUSD
+                    untrackedVolumeUSD
                 }
             }
         ';
@@ -127,6 +146,7 @@ class Client
             'ids' => array_map(function ($id) {
                 return strtolower($id);
             }, $ids),
+            'blockNumber' => $this->blockFinder->getBlockByTimestamp($asOf),
         ];
 
         $response = $this->request($query, $variables);
@@ -141,13 +161,16 @@ class Client
     }
 
     /**
-     *
+     * Returns mints in descending order
+     * TODO: add time params
+     * @param array $paidIds
+     * @return UniswapMintEntity[]
      */
     public function getMintsByPairIds(array $pairIds = []): array
     {
         $query = '
             query($ids: [String!]) {
-                mints(where: { pair_in: $ids }) {
+                mints(where: { pair_in: $ids }, orderBy: timestamp, orderDirection: desc, first: 1000) {
                     id
                     to
                     amount0
@@ -179,6 +202,40 @@ class Client
         }
 
         return $mints;
+    }
+
+    /**
+     * Get token prices in USD
+     * @param string $tokenAddress
+     * @return array
+     */
+    public function getTokenUsdPrices(string $tokenAddress): array
+    {
+        $query = '
+            query($tokenAddress: String!) {
+                bundle(id: "1") {
+                    ethPrice
+                } 
+                token(id: $tokenAddress) {
+                    derivedETH
+                } 
+            }
+        ';
+
+        $variables = [
+            'tokenAddress' => strtolower($tokenAddress),
+        ];
+
+        $response = $this->request($query, $variables);
+
+        $ethUsd = BigDecimal::of($response['bundle']['ethPrice']);
+        $ethToken = BigDecimal::of($response['token']['derivedETH']);
+        $tokenUsd = $ethUsd->multipliedBy($ethToken);
+
+        return [
+            'eth' => $ethUsd,
+            'token' => $tokenUsd,
+        ];
     }
 
     /**

@@ -250,7 +250,17 @@ class newsfeed implements Interfaces\Api
             default:
                 //essentially an edit
                 if (is_numeric($pages[0])) {
-                    $activity = new Activity($pages[0]);
+                    $activity = Di::_()->get('EntitiesBuilder')->single($pages[0]);
+
+                    // When editing media posts, they can sometimes be non-activity entities
+                    // so we provide some additional field
+                    // TODO: Anoter possible bug is the descrepency between 'description' and 'message'
+                    // here we are updating message field. Propose fixing this at Object/Image level
+                    // vs patching on activity
+                    if (!$activity instanceof Activity) {
+                        $activity = $manager->createFromEntity($activity);
+                        $activity->guid = $pages[0]; // createFromEntity makes a new entity
+                    }
 
                     $activityMutation = new EntityMutation($activity);
 
@@ -297,7 +307,8 @@ class newsfeed implements Interfaces\Api
                         $activityMutation->setLicense($license);
                     }
 
-                    if (isset($_POST['time_created'])) {
+                    // NOTE: Only update time created (schedule) if greater than current time)
+                    if (isset($_POST['time_created']) && $activity->getTimeCreated() > time()) {
                         $activityMutation->setTimeCreated($_POST['time_created']);
                     }
 
@@ -382,7 +393,13 @@ class newsfeed implements Interfaces\Api
                             'message' => 'Remind not found',
                         ]);
                     }
-                    if (!Di::_()->get('Security\ACL')->interact($remind, $user)) {
+                    
+                    // throw and error return response if acl interaction check fails.
+                    try {
+                        if (!Di::_()->get('Security\ACL')->interact($remind, $user)) {
+                            throw new \Exception(null);
+                        }
+                    } catch (\Exception $e) {
                         return Factory::response([
                             'status' => 'error',
                             'message' => 'You can not interact with this post',
@@ -478,7 +495,7 @@ class newsfeed implements Interfaces\Api
                     }
 
                     // save entity
-                    $guid = $manager->add($activity);
+                    $success = $manager->add($activity);
 
                     // if posting to permaweb
                     try {
@@ -489,7 +506,7 @@ class newsfeed implements Interfaces\Api
                             // get guid for linkback
                             $newsfeedGuid = $activity->custom_type === 'video' || $activity->custom_type === 'batch'
                                 ? $activity->entity_guid
-                                : $guid;
+                                : $activity->guid;
 
                             // dry run to generate id and save it to this activity, but not commit it to the arweave network.
                             Di::_()->get('Permaweb\Delegates\GenerateIdDelegate')
@@ -513,7 +530,7 @@ class newsfeed implements Interfaces\Api
                     ]);
                 }
 
-                if ($guid) {
+                if ($success) {
                     // Follow activity
                     (new Core\Notification\PostSubscriptions\Manager())
                         ->setEntityGuid($activity->guid)
@@ -536,7 +553,7 @@ class newsfeed implements Interfaces\Api
                     }
 
                     $activity->setExportContext(true);
-                    return Factory::response(['guid' => $guid, 'activity' => $activity->export()]);
+                    return Factory::response(['guid' => $activity->guid, 'activity' => $activity->export()]);
                 } else {
                     return Factory::response(['status' => 'failed', 'message' => 'could not save']);
                 }

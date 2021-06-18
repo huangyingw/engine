@@ -34,7 +34,7 @@ class TokenSpec extends ObjectBehavior
 
     public function it_should_return_the_balance()
     {
-        $this->client->call('minds_token_addr', 'balanceOf(address)', ['foo'])
+        $this->client->call('minds_token_addr', 'balanceOf(address)', ['foo'], null)
             ->shouldBeCalled()
             ->willReturn('0x2B5E3AF16B1880000');
 
@@ -43,7 +43,7 @@ class TokenSpec extends ObjectBehavior
 
     public function it_should_return_the_total_supply()
     {
-        $this->client->call('minds_token_addr', 'totalSupply()', [])
+        $this->client->call('minds_token_addr', 'totalSupply()', [], null)
             ->shouldBeCalled()
             ->willReturn('0xDE0B6B3A7640000');
 

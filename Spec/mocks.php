@@ -7,6 +7,7 @@ class Mock
     const BATCH_UNLOGGED = 1;
     const CONSISTENCY_ALL = 1;
     const CONSISTENCY_QUORUM = 2;
+    const CONSISTENCY_LOCAL_QUORUM = 3;
 
     public function __construct($a = null)
     {
@@ -249,6 +250,7 @@ if (!class_exists('Cassandra')) {
     class_alias('Mock', 'Cassandra\ExecutionOptions');
     class_alias('Mock', 'Cassandra\Varint');
     class_alias('Mock', 'Cassandra\Timestamp');
+    class_alias('Mock', 'Cassandra\Date');
     class_alias('Mock', 'Cassandra\Type');
     class_alias('MockSet', 'Cassandra\Type\Set');
     class_alias('MockMap', 'Cassandra\Type\Map');
