@@ -65,7 +65,7 @@ index 46a9b2f1d..03aeb4bae 100644
 @@ -1,15 +1,15 @@
  FROM php:7.3-fpm-alpine3.10
  
--RUN apk add --no-cache --update php-deps make
+-RUN apk add --no-cache --update --virtual .php-deps make
 +RUN apk add --update make
  
 -RUN apk add --no-cache --virtual build-deps \
@@ -122,8 +122,8 @@ index 46a9b2f1d..03aeb4bae 100644
 -RUN apk update && apk add --no-cache py-pip && pip install --upgrade pip && pip install awscli
 +RUN apk update && apk add  py-pip && pip install --upgrade pip && pip install awscli
  
- # PHP INI
- COPY php.ini /usr/local/etc/php/
+ # Build Pulsar
+ 
 diff --git a/containers/transcoder/Dockerfile b/containers/transcoder/Dockerfile
 index dad73cd64..64ffebf8e 100644
 --- ./containers/transcoder/Dockerfile
