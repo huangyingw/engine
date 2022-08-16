@@ -1,4 +1,4 @@
-FROM php:7.3-fpm-alpine3.10
+FROM php:8.0-fpm-alpine3.15
 
 RUN apk add --update make
 
@@ -17,24 +17,24 @@ RUN apk add  --virtual build-deps \
     npm \
     ffmpeg \
     icu-dev \
+    gmp-dev \
     && docker-php-ext-install -j$(nproc) bcmath \
     && docker-php-ext-install -j$(nproc) zip \
-    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-install -j$(nproc) exif \
     && docker-php-ext-install -j$(nproc) sockets \
     && docker-php-ext-install -j$(nproc) intl \
+    && docker-php-ext-install -j$(nproc) gmp \
     && apk del build-deps
 
 # PECL Extensions
 RUN apk add  --virtual build-deps \
     $PHPIZE_DEPS \
     imagemagick-dev \
-    && pecl install mongodb \
     && pecl install redis \
     && pecl install apcu \
     && pecl install imagick \
-    && docker-php-ext-enable mongodb \
     && docker-php-ext-enable redis \
     && docker-php-ext-enable apcu \
     && docker-php-ext-enable imagick \
@@ -60,16 +60,39 @@ ENV BUILD_DEPS \
     zlib-dev \
     $PHPIZE_DEPS
 
-RUN apk add  --virtual build-deps $BUILD_DEPS \
-    && apk add  libuv gmp \
-    && git clone https://github.com/datastax/php-driver.git $INSTALL_DIR \
+RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+    && apk add --no-cache libuv gmp \
+    && git clone --branch=v1.3.x https://github.com/nano-interactive/php-driver.git $INSTALL_DIR \
     && cd $INSTALL_DIR \
-    && git reset --hard f73debf39e395817dd2ced76acfc64249d4d3a0a \
     && git submodule update --init \
-    && cd ext && bash $INSTALL_DIR/ext/install.sh \
+    # Install CPP Driver
+    && cd $INSTALL_DIR/lib/cpp-driver \
+    && mkdir build && cd build \
+    && cmake -DCASS_BUILD_STATIC=ON -DCASS_BUILD_SHARED=ON .. \
+    && make && make install \
+    # Install PHP Driver
+    && cd $INSTALL_DIR/ext \
+    && phpize && ./configure && make && make install \
     && docker-php-ext-enable cassandra \
     && apk del build-deps \
     && rm -rf $INSTALL_DIR
+
+# blurhash extension
+RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+    && curl -fsSL 'https://gitlab.com/minds/php-ext-blurhash/-/archive/master/php_ext_blurhash-master.tar.gz' -o blurhash.tar.gz \
+    && mkdir -p blurhash \
+    && tar -xf blurhash.tar.gz -C blurhash --strip-components=1 \
+    && rm blurhash.tar.gz \
+    && ( \
+        cd blurhash \
+        && phpize \
+        && ./configure\
+        && make -j "$(nproc)" \
+        && make install \
+    ) \
+    && rm -r blurhash \
+    && docker-php-ext-enable blurhash \
+    && apk del build-deps
 
 # ZMQ extension
 ENV INSTALL_DIR /usr/src/php-zmq
@@ -119,8 +142,9 @@ ENV BUILD_DEPS \
 
 RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
     # PHP CPP
-    && git clone https://github.com/CopernicaMarketingSoftware/PHP-CPP.git \
+    && git clone https://github.com/Minds/PHP-CPP.git \
     && cd PHP-CPP \
+    && git checkout php80 \
     && make -j4 \
     && make install \
     && cd .. \
@@ -139,7 +163,33 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
     && rm -rf PHP-CPP pulsar pulsar-php-client \
     && apk del build-deps
 
-RUN apk add protobuf-dev
+RUN apk add protobuf-dev automake
+
+
+RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+    # libsecp256kq
+    && git clone https://github.com/bitcoin-core/secp256k1.git \
+    && cd secp256k1 \
+        && git checkout efad3506a8937162e8010f5839fdf3771dfcf516 \
+    && ./autogen.sh \
+    && ./configure --enable-tests=no --enable-benchmark=no --enable-experimental --enable-module-ecdh --enable-module-recovery --enable-module-schnorrsig --enable-module-extrakeys \
+    && make \
+    && make install \
+    && cd .. \
+    # secp256k1-php
+    && git clone https://github.com/Minds/secp256k1-php.git --branch fix-php8-schnorrsig \
+    && cd secp256k1-php/secp256k1 \
+    && phpize \
+    && ./configure --with-secp256k1-config --with-module-recovery --with-module-ecdh --with-module-schnorrsig --with-module-extrakeys \
+    && make \
+    && make install \
+    && docker-php-ext-enable secp256k1 \
+    && cd ../../ \
+    && rm -rf secp256k1 secp256k1-php \
+    && apk del build-deps
+
+# Install PDO
+RUN docker-php-ext-install pdo pdo_mysql
 
 # PHP INI
 COPY php.ini /usr/local/etc/php/
