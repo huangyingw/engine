@@ -5,7 +5,7 @@
     remote = origin
 [gsync]
     remote = Minds
-    branch = master
+    target = Minds/master
 [branch "dev"]
     remote = origin
     merge = refs/heads/dev
