@@ -2,6 +2,7 @@
 /settings.php
 /multi.settings.php
 !.gitlab-ci.yml
+!.php-cs-fixer.php
 bin
 
 /.htaccess
@@ -12,7 +13,7 @@ bin
 # ignore cassandra log
 cassandra.log
 # ignore IDE/hidden/OS cache files
-.*
+.**/**
 *~
 !/.gitignore
 /nbproject
@@ -32,3 +33,8 @@ composer.phar
 settings.php-*.bak
 !/.gitattributes
 cassandra.log
+
+test_results.html
+
+**/.DS_Store
+**/.editorconfig
