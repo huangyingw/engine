@@ -4,7 +4,6 @@ namespace Minds\Core\Analytics;
 
 use Minds\Core\Analytics\Aggregates\ActionsHistogram;
 use Minds\Core\Analytics\Aggregates\TopActions;
-use Minds\Core\Data\ElasticSearch\Prepared;
 use Minds\Core\Di\Di;
 
 class Manager
@@ -20,14 +19,15 @@ class Manager
     private $onlyPlus = false;
 
     private $actions = [
-        'subscribers' => 'subscribe',
-        'comments' => 'comment',
-        'reminds' => 'remind',
+        //'subscribers' => 'subscribe',
+        //'comments' => 'comment',
+        //'reminds' => 'remind',
         'votes' => 'vote:up',
-        'referrals' => 'referral',
+        // 'downvotes' => 'vote:down',
+        //'referrals' => 'referral',
     ];
 
-    public function __construct($client = null, $index = null)
+    public function __construct($client = null)
     {
         $this->es = $client ?: Di::_()->get('Database\ElasticSearch');
     }

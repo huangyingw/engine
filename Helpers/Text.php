@@ -125,6 +125,22 @@ class Text
 
         preg_match_all($htRe, $fullText, $matches);
 
-        return $matches[2] ?? [];
+        return array_filter($matches[2] ?? [], function ($tag) {
+            return is_string($tag);
+        });
+    }
+
+    /**
+     * Truncate a string
+     * @param string $str - the input
+     * @param int $maxLength - the max length of your output
+     * @return string
+     */
+    public static function truncate(string $str, int $maxLength = 140): string
+    {
+        if (strlen($str) > $maxLength) {
+            return substr($str, 0, $maxLength - 3) . "...";
+        }
+        return $str;
     }
 }

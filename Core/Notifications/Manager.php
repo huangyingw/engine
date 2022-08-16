@@ -5,6 +5,8 @@ use Minds\Entities\User;
 use Minds\Helpers\Counters;
 use Minds\Core\Comments;
 use Minds\Core\Di\Di;
+use Minds\Core\EntitiesBuilder;
+use Minds\Core\Security\ACL;
 
 class Manager
 {
@@ -17,11 +19,18 @@ class Manager
     /** @var Delegates\NotificationsDelegateInterface[] */
     protected $delegates = [];
 
-    public function __construct(Repository $repository = null, Comments\Manager $commentsManager = null, array $delegates = [])
-    {
+    public function __construct(
+        Repository $repository = null,
+        Comments\Manager $commentsManager = null,
+        array $delegates = [],
+        private ?ACL $acl = null,
+        private ?EntitiesBuilder $entitiesBuilder = null
+    ) {
         $this->repository = $repository ?? new Repository();
         $this->commentsManager = $commentsManager ?? Di::_()->get('Comments\Manager');
         $this->delegates = $delegates;
+        $this->acl = $acl ?? Di::_()->get('Security\ACL');
+        $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
     }
 
     /**
@@ -30,7 +39,10 @@ class Manager
      */
     public function getUnreadCount(User $user): int
     {
-        return Counters::get($user, 'notifications:v3:count', false);
+        $count = Counters::get($user, 'notifications:v3:count', false);
+        // fixes an issue where the counter would sometimes
+        // return a negative values due to race condition
+        return $count > 0 ? $count : 0;
     }
 
     /**
@@ -67,13 +79,17 @@ class Manager
             /** @var Notification */
             $notification = $tuple[0];
 
+            if (!$this->canShow($notification)) {
+                continue;
+            }
+
             if ($opts->getMerge()) {
                 // Was there a groupable notification above?
                 // We check below with a mergedKey and combine all that match
 
                 $mergeKey = $notification->getMergeKey();
 
-                if ($mergeableWith = $mergeKeysToNotification[$mergeKey]) {
+                if (isset($mergeKeysToNotification[$mergeKey]) && $mergeableWith = $mergeKeysToNotification[$mergeKey]) {
 
                     // First, check for duplication, we don't want 'sillysealion and sillysealion' vote up...
                     if ($mergeableWith->getFromGuid() === $notification->getFromGuid()) {
@@ -196,5 +212,19 @@ class Manager
             ];
         }
         return $this->delegates;
+    }
+
+    /**
+     * Determine whether notification can be shown based on whether an
+     * ACL read on the sender is permitted.
+     * @param Notification $notification - notification to check.
+     * @return boolean - true if notification can be shown.
+     */
+    protected function canShow(?Notification $notification = null): bool
+    {
+        $sender = $this->entitiesBuilder->single(
+            $notification->getFromGuid()
+        );
+        return $sender && $this->acl->read($sender);
     }
 }

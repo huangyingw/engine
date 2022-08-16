@@ -81,6 +81,19 @@ class Provider extends DiProvider
                 'matrix',
                 'cloudflare-streams',
                 'notifications-v3',
+                'withdrawal-console',
+                'twilio-verify',
+                'helpdesk-2021',
+                'plus-discovery-filter',
+                'twitter-sync',
+                'discovery-default-tags',
+                'skale',
+                'polygon',
+                'social-compass',
+                'content-settings-modal',
+                'nav-2021',
+                'top-feed',
+                'web3-service-withdrawals'
             ];
         });
 

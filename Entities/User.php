@@ -5,18 +5,77 @@ namespace Minds\Entities;
 use Minds\Common\ChannelMode;
 use Minds\Core;
 use Minds\Helpers;
+use Minds\Helpers\StringLengthValidators\BriefDescriptionLengthValidator;
 
 /**
  * User Entity.
  *
  * @todo Do not inherit from ElggUser
+ * @property int $boost_rating
+ * @property int $mature
+ * @property int $mature_content
+ * @property int $mature_lock
+ * @property int $is_mature
+ * @property int $spam
+ * @property int $deleted
+ * @property array $social_profiles
+ * @property string $ban_monetization
+ * @property array $tags
+ * @property int $onboarding_shown
+ * @property User $last_avatar_upload
+ * @property int $toaster_notifications
+ * @property int $onchain_booster
+ * @property int $theme
+ * @property int $canary
+ * @property int $opted_in_hashtags
+ * @property int $last_accepted_tos
+ * @property int $creator_frequency
+ * @property string $phone_number
+ * @property string $phone_number_hash
+ * @property array $wire_rewards
+ * @property int $icontime
+ * @property array $pinned_posts
+ * @property array $feature_flags
+ * @property array $programs
+ * @property string $eth_wallet
+ * @property int $eth_incentive
+ * @property array $categories
+ * @property int $plus_expires
+ * @property string $plus_method;
+ * @property int $pro_expires
+ * @property string $pro_method;
+ * @property int $pro_published
+ * @property int $disabled_boost
+ * @property int $founder
+ * @property array $merchant
+ * @property array $monetization_settings
+ * @property array $group_membership
+ * @property int $boost_autorotate
+ * @property string $fb
+ * @property int $verified
+ * @property int $mode
+ * @property string $btc_address
+ * @property bool $initial_onboarding_completed
+ * @property string $email_confirmation_token
+ * @property int $email_confirmed_at
+ * @property int $allow_unsubscribed_contact
+ * @property bool $hide_share_buttons
+ * @property array $dismissed_widgets
+ * @property int $partner_rpm
+ * @property int $liquidity_spot_opt_out
+ * @property string $public_dob
+ * @property string $dob
+ * @property string $surge_token
+ * @property int $disable_autoplay_videos
+ * @property string $twofactor
+ * @property string $briefdescription
  */
 class User extends \ElggUser
 {
     public $fullExport = true;
     public $exportCounts = false;
 
-    const PLUS_PRO_VALID_METHODS = [
+    public const PLUS_PRO_VALID_METHODS = [
         'tokens',
         'usd',
     ];
@@ -53,7 +112,7 @@ class User extends \ElggUser
         $this->attributes['btc_address'] = '';
         $this->attributes['phone_number'] = null;
         $this->attributes['phone_number_hash'] = null;
-        $this->attributes['icontime'] = time();
+        $this->attributes['icontime'] = 0;
         $this->attributes['briefdescription'] = '';
         $this->attributes['rating'] = 1;
         $this->attributes['p2p_media_enabled'] = 0;
@@ -92,7 +151,7 @@ class User extends \ElggUser
      */
     public function getUsername(): string
     {
-        return $this->username;
+        return $this->username ?: '';
     }
 
     /**
@@ -101,7 +160,29 @@ class User extends \ElggUser
      */
     public function getName(): string
     {
-        return $this->name;
+        return $this->name ?: '';
+    }
+
+    /**
+     * Set the name
+     * @param string $name
+     * @return self
+     */
+    public function setName(string $name): self
+    {
+        $this->name = $name;
+        return $this;
+    }
+
+    /**
+     * Set the briefdescription
+     * @param string $briefdescription
+     * @return self
+     */
+    public function setBriefDescription(string $briefdescription): self
+    {
+        $this->briefdescription = $briefdescription;
+        return $this;
     }
 
     /**
@@ -394,7 +475,7 @@ class User extends \ElggUser
      */
     public function getLanguage()
     {
-        return $this->language;
+        return $this->language ?? "en";
     }
 
     /**
@@ -762,7 +843,10 @@ class User extends \ElggUser
     }
 
     /**
-     * @return bool
+     * Whether a user has an `email_confirmed_at` time.
+     * Consider calling `isTrusted()` rather than calling this function directly
+     * as isTrusted contains a polyfill for legacy accounts.
+     * @return bool true if user has an `email_confirmed_at` time.
      */
     public function isEmailConfirmed(): bool
     {
@@ -838,7 +922,7 @@ class User extends \ElggUser
      */
     public function unSubscribe($guid)
     {
-        return \Minds\Helpers\Subscriptions::unSubscribe($this->guid, $guid, $data);
+        return \Minds\Helpers\Subscriptions::unSubscribe($this->guid, $guid);
     }
 
     /**
@@ -904,10 +988,6 @@ class User extends \ElggUser
 
     public function getSubscribersCount()
     {
-        if ($this->host) {
-            return 0;
-        }
-
         $cacher = Core\Data\cache\factory::build();
         if ($cache = $cacher->get("$this->guid:friendsofcount")) {
             return $cache;
@@ -915,7 +995,7 @@ class User extends \ElggUser
 
         $db = new Core\Data\Call('friendsof');
         $return = (int) $db->countRow($this->guid);
-        $cacher->set("$this->guid:friendsofcount", $return, 360);
+        $cacher->set("$this->guid:friendsofcount", $return, 259200); //cache for 3 days
 
         return (int) $return;
     }
@@ -927,10 +1007,6 @@ class User extends \ElggUser
      */
     public function getSubscriptonsCount()
     {
-        if ($this->host) {
-            return 0;
-        }
-
         $cacher = Core\Data\cache\factory::build();
         if ($cache = $cacher->get("$this->guid:friendscount")) {
             return $cache;
@@ -938,7 +1014,7 @@ class User extends \ElggUser
 
         $db = new Core\Data\Call('friends');
         $return = (int) $db->countRow($this->guid);
-        $cacher->set("$this->guid:friendscount", $return, 360);
+        $cacher->set("$this->guid:friendscount", $return, 259200); //cache for 3 days
 
         return (int) $return;
     }
@@ -990,8 +1066,8 @@ class User extends \ElggUser
 
         if ($this->fullExport) {
             if (Core\Session::isLoggedIn()) {
-                $export['subscribed'] = elgg_get_logged_in_user_entity()->isSubscribed($this->guid);
-                $export['subscriber'] = elgg_get_logged_in_user_entity()->isSubscriber($this->guid);
+                $export['subscribed'] = Core\Session::getLoggedinUser()->isSubscribed($this->guid);
+                $export['subscriber'] = Core\Session::getLoggedinUser()->isSubscriber($this->guid);
             }
         }
         if ($this->exportCounts) {
@@ -1039,6 +1115,8 @@ class User extends \ElggUser
         $export['toaster_notifications'] = $this->getToasterNotifications();
         $export['mode'] = $this->getMode();
 
+        $export['briefdescription'] = (new BriefDescriptionLengthValidator())->validateMaxAndTrim($export['briefdescription']);
+
         if (is_string($export['social_profiles'])) {
             $export['social_profiles'] = json_decode($export['social_profiles']);
         }
@@ -1060,9 +1138,7 @@ class User extends \ElggUser
             $export['deleted'] = $this->getDeleted();
         }
 
-        $export['email_confirmed'] =
-            (!$this->getEmailConfirmationToken() && !$this->getEmailConfirmedAt()) || // Old users poly-fill
-            $this->isEmailConfirmed();
+        $export['email_confirmed'] = $this->isTrusted();
 
         $export['eth_wallet'] = $this->getEthWallet() ?: '';
         $export['rating'] = $this->getRating();

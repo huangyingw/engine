@@ -3,6 +3,7 @@
 namespace Minds\Core\Events;
 
 use Minds\Exceptions;
+use Minds\Exceptions\StopEventException;
 
 class Dispatcher
 {
@@ -16,8 +17,6 @@ class Dispatcher
      */
     public static function init()
     {
-        Listeners\Channel::init();
-        Listeners\Comments::init();
     }
 
     /**
@@ -29,7 +28,7 @@ class Dispatcher
      */
     public static function register($event, $namespace, $handler, $priority = 500)
     {
-        if (empty($namespace) || empty($event) || !is_callable($handler)) {
+        if (!$namespace || !$event || !is_callable($handler)) {
             return false;
         }
 
@@ -146,7 +145,7 @@ class Dispatcher
                     }
                 }
             }
-        } catch (\Minds\Core\exceptions\StopEventException $ex) {
+        } catch (StopEventException $ex) {
             // Stop execution when we get this exception, all other exceptions bubble up.
             return false;
         }

@@ -40,7 +40,6 @@ class Repository
             'user_guid' => null,
             'limit' => null,
             'offset' => null,
-            'plan_id' => null,
             'entity_guid' => null,
         ], $options);
 
@@ -51,7 +50,10 @@ class Repository
         $values = [];
 
         if ($options['user_guid']) {
-            $template = "SELECT * FROM subscriptions_by_user_guid";
+            // $template = "SELECT * FROM subscriptions_by_user_guid";
+            // Above is commented out as we now prefer to use a secondary index
+            // Whilst secondary indexes can have performance trade offs, materialized views have
+            // been very buggy and are unable to stay in sync
             $where = [ 'user_guid = ?' ];
             $values = [ new Varint($options['user_guid']) ];
         }
@@ -86,7 +88,7 @@ class Repository
             }
 
             $where[] = 'next_billing <= ?';
-            $values[] = new Timestamp((int) $options['next_billing']);
+            $values[] = new Timestamp((int) $options['next_billing'], 0);
             $allowFiltering = true;
         }
 
@@ -130,6 +132,7 @@ class Repository
                 ->setLastBilling($row['last_billing']->time())
                 ->setNextBilling($row['next_billing']->time())
                 ->setStatus($row['status']);
+
             $subscriptions[] = $subscription;
         }
 
@@ -207,8 +210,8 @@ class Repository
             new Varint($subscription->getUser()->guid),
             $subscription->getInterval(),
             $subscription->getStatus(),
-            new Timestamp($subscription->getLastBilling()),
-            new Timestamp($subscription->getNextBilling())
+            new Timestamp($subscription->getLastBilling(), 0),
+            new Timestamp($subscription->getNextBilling(), 0)
         ]
         );
 

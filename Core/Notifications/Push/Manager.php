@@ -34,6 +34,9 @@ class Manager
     /** @var Services\FcmService */
     protected $fcmService;
 
+    /** @var Services\WebPushService */
+    protected $webPushService;
+
     public function __construct(
         Notifications\Manager $notificationsManager = null,
         DeviceSubscriptions\Manager $deviceSubscriptionsManager = null,
@@ -57,6 +60,10 @@ class Manager
     {
         /** @var User */
         $toUser = $this->getEntitiesBuilder()->single($notification->getToGuid());
+
+        if (!$toUser) {
+            return;
+        }
 
         // Only if the user allows the feature flag, should we send a push notification
         if (!$this->getFeaturesManager()->setUser($toUser)->has('notifications-v3')) {
@@ -171,6 +178,11 @@ class Manager
                     $this->fcmService = new Services\FcmService();
                 }
                 return $this->fcmService;
+            case DeviceSubscription::SERVICE_WEBPUSH:
+                if (!$this->webPushService) {
+                    $this->webPushService = new Services\WebPushService();
+                }
+                return $this->webPushService;
         }
         throw new Exception('Invalid service');
     }

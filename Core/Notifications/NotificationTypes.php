@@ -202,6 +202,37 @@ class NotificationTypes
     /** @var string */
     const GROUPING_TYPE_REPORTS = 'reports';
 
+
+    /**
+     * *******************************************
+     * Top Posts
+     */
+
+    /** @var string */
+    const TYPE_TOP_POSTS = 'top_posts';
+
+    /** @var string */
+    const GROUPING_TOP_POSTS = [ self::TYPE_TOP_POSTS ];
+
+    /** @var string */
+    const GROUPING_TYPE_TOP_POSTS = 'top_posts';
+
+
+    /**
+     * *******************************************
+     * Community Updates
+     */
+
+    /** @var string */
+    const TYPE_COMMUNITY_UPDATES = 'community_updates';
+
+    /** @var string */
+    const GROUPING_COMMUNITY_UPDATES = [ self::TYPE_COMMUNITY_UPDATES ];
+
+    /** @var string */
+    const GROUPING_TYPE_COMMUNITY_UPDATES = 'community_updates';
+
+
     /**
      * *******************************************
      * Wires
@@ -284,5 +315,7 @@ class NotificationTypes
         self::GROUPING_TYPE_GROUPS => self::GROUPING_GROUPS,
         self::GROUPING_TYPE_WIRES => self::GROUPING_WIRES,
         self::GROUPING_TYPE_REPORTS => self::GROUPING_REPORTS,
+        self::GROUPING_TYPE_TOP_POSTS => self::GROUPING_TOP_POSTS,
+        self::GROUPING_TYPE_COMMUNITY_UPDATES => self::GROUPING_COMMUNITY_UPDATES,
     ];
 }

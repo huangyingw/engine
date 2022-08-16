@@ -41,32 +41,44 @@ class Repository
         $opts = array_merge([
             'limit' => 12,
             'from' => strtotime('-12 hours', time()),
+            'to' => null,
             'languages' => [ 'en' ],
+            'wire_support_tier' => null,
+            'exclude_tags' => [], // tags to exclude.
         ], $opts);
 
-        $body = [
-            'query' => [
-                'bool' => [
-                    'must' => [
-                        [
-                            'range' => [
-                                '@timestamp' => [
-                                    'gte' => $opts['from'] * 1000,
-                                ],
-                            ],
-                        ],
-                        [
-                            'terms' => [
-                                'language' => $opts['languages'],
-                            ],
-                        ]
+        $must= [
+            [
+                'range'=> [
+                    '@timestamp'=> [
+                        'gte' => $opts['from'] * 1000,
+                        'lte' => $opts['to'] ? $opts['to'] * 1000 : null
                     ],
-                    'must_not' => [
-                        'bool' => [
-                            'should' => [
+                ],
+            ],
+            [
+                'terms'=> [
+                    'language'=> $opts['languages'],
+                ],
+            ],
+        ];
+
+        if ($opts['wire_support_tier']) {
+            $must[]['term'] = [
+                'wire_support_tier'=> $opts['wire_support_tier']
+            ];
+        }
+
+        $body= [
+            'query'=> [
+                'bool'=> [
+                    'must'=> $must,
+                    'must_not'=> [
+                        'bool'=> [
+                            'should'=> [
                                 [
-                                    'terms' => [
-                                        'nsfw' => [ 1, 2, 3, 4, 5, 6 ],
+                                    'terms'=> [
+                                        'nsfw'=> [ 1, 2, 3, 4, 5, 6],
                                     ],
                                 ],
                             ],
@@ -77,9 +89,13 @@ class Repository
             'aggs' => [
                 'tags' => [
                     'terms' => [
-                        'field' => 'tags.keyword',
+                        'field' => 'tags',
                         'size' => $opts['limit'],
-                        'exclude' => array_merge($this->config->get('tags'), array_column($this->getHidden(), 'hashtag')),
+                        'exclude' => array_merge(
+                            $this->config->get('tags'),
+                            array_column($this->getHidden(), 'hashtag'),
+                            $opts['exclude_tags']
+                        ),
                         'order' => [
                             'owners' => 'desc',
                         ],
@@ -92,7 +108,7 @@ class Repository
                         ],
                         'owners' => [
                             'cardinality' => [
-                                'field' => 'owner_guid.keyword',
+                                'field' => 'owner_guid',
                             ],
                         ],
                     ],
@@ -101,8 +117,7 @@ class Repository
         ];
 
         $query = [
-            'index' => 'minds_badger',
-            'type' => 'activity',
+            'index' => $this->config->get('elasticsearch')['indexes']['search_prefix'] . '-activity',
             'body' => $body,
             'size' => 0,
         ];
@@ -117,13 +132,20 @@ class Repository
         $rows = $result['aggregations']['tags']['buckets'];
 
         usort($rows, function ($a, $b) {
-            $a_score = $this->getConfidenceScore($a['owners']['value'], $a['counts']['value']);
-            $b_score = $this->getConfidenceScore($b['owners']['value'], $b['counts']['value']);
+            $a_count = !empty($a['counts']['value']) ? $a['counts']['value'] : 1;
+            $b_count = !empty($b['counts']['value']) ? $b['counts']['value'] : 1;
+
+            // Make sure we're not dividing by zero
+            $a_score = $this->getConfidenceScore($a['owners']['value'], $a_count);
+            $b_score = $this->getConfidenceScore($b['owners']['value'], $b_count);
 
             return $a_score < $b_score ? 1 : 0;
         });
 
         foreach ($rows as $row) {
+            if ($row['key'] === '') {
+                continue;
+            }
             $response[] = [
                 'tag' => $row['key'],
                 'posts' => $row['doc_count'],
@@ -165,7 +187,7 @@ class Repository
         $cql = "INSERT INTO hidden_hashtags (hashtag, hidden_since, admin_guid) VALUES (?, ?, ?)";
         $values = [
             $tag,
-            new Timestamp(time()),
+            new Timestamp(time(), 0),
             new Bigint($admin_guid),
         ];
 

@@ -12,11 +12,15 @@ use Minds\Core\Entities\Delegates\BoostGuidResolverDelegate;
 use Minds\Core\Entities\Delegates\CommentGuidResolverDelegate;
 use Minds\Core\Entities\Delegates\EntityGuidResolverDelegate;
 use Minds\Core\Entities\Delegates\EventsResolverDelegate;
-use Minds\Core\Entities\Delegates\ResolverDelegate;
 use Minds\Core\Entities\Delegates\FilterEntitiesDelegate;
+use Minds\Core\Entities\Delegates\ResolverDelegate;
+use Minds\Core\Entities\Delegates\SystemPushNotificationResolverDelegate;
 use Minds\Core\Security\ACL;
 use Minds\Entities\User;
 
+/**
+ *
+ */
 class Resolver
 {
     /** @var ResolverDelegate[] $entitiesBuilder */
@@ -46,6 +50,7 @@ class Resolver
             EntityGuidResolverDelegate::class => new EntityGuidResolverDelegate(),
             BoostGuidResolverDelegate::class => new BoostGuidResolverDelegate(),
             CommentGuidResolverDelegate::class => new CommentGuidResolverDelegate(),
+            SystemPushNotificationResolverDelegate::class => new SystemPushNotificationResolverDelegate(),
         ];
 
         $this->acl = $acl ?: ACL::_();
@@ -84,7 +89,7 @@ class Resolver
     /**
      * @return array
      */
-    public function fetch()
+    public function fetch(): array
     {
         // Setup batches for bulk operations on some resolvers
         $batches = [];
@@ -143,7 +148,12 @@ class Resolver
         return $sorted;
     }
 
-    public function single($urn)
+    /**
+     * Gets an entity URN and returns the Entity object
+     * @param $urn
+     * @return mixed
+     */
+    public function single($urn): mixed
     {
         $this->urns = [$urn];
         $entities = $this->fetch();

@@ -28,6 +28,9 @@ class DataProvider extends Provider
         $this->di->bind('Cache\PsrWrapper', function ($di) {
             return new cache\PsrWrapper();
         }, ['useFactory'=>true]);
+        $this->di->bind('Cache\Cassandra', function ($di) {
+            return new cache\Cassandra();
+        }, ['useFactory'=>true]);
         /**
          * Database bindings
          */
@@ -64,33 +67,14 @@ class DataProvider extends Provider
         $this->di->bind('Database\MongoDB', function ($di) {
             return new MongoDB\Client();
         }, ['useFactory'=>true]);
-        $this->di->bind('Database\Neo4j', function ($di) {
-            return new Neo4j\Client();
-        }, ['useFactory'=>true]);
         $this->di->bind('Database\ElasticSearch', function ($di) {
             return new ElasticSearch\Client();
         }, ['useFactory'=>true]);
         $this->di->bind('Database\ElasticSearch\Scroll', function ($di) {
             return new ElasticSearch\Scroll();
         }, ['useFactory'=>true]);
-        $this->di->bind('Database\PDO', function ($di) {
-            $config = $di->get('Config')->get('database');
-            $host = isset($config['host']) ? $config['host'] : 'cockroachdb';
-            $port = isset($config['port']) ? $config['port'] : 26257;
-            $name = isset($config['name']) ? $config['name'] : 'minds';
-            $sslmode = isset($config['sslmode']) ? $config['sslmode'] : 'disable';
-            $username = isset($config['username']) ? $config['username'] : 'php';
-            // This is a generic data object using the postgres driver to connect to cockroachdb.
-            return new PDO(
-                "pgsql:host=$host;port=$port;dbname=$name;sslmode=$sslmode",
-                $username,
-                null,
-                [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_EMULATE_PREPARES => true,
-                    PDO::ATTR_PERSISTENT => isset($config['persistent']) ? $config['persistent'] : false,
-                ]
-            );
+        $this->di->bind('Database\MySQL\Client', function ($di) {
+            return new MySQL\Client();
         }, ['useFactory'=>true]);
         /**
          * Locks
@@ -114,13 +98,13 @@ class DataProvider extends Provider
          * Redis
          */
         $this->di->bind('Redis', function ($di) {
-            $master = $di->get('Config')->redis['master'];
+            $master = ($di->get('Config')->redis ?? null)['master'] ?? null;
             $client = new Redis\Client();
             $client->connect($master);
             return $client;
         }, ['useFactory'=>true]);
         $this->di->bind('Redis\Slave', function ($di) {
-            $slave = $di->get('Config')->redis['slave'];
+            $slave = ($di->get('Config')->redis ?? null)['slave'] ?? null;
             $client = new Redis\Client();
             $client->connect($slave);
             return $client;
@@ -131,5 +115,9 @@ class DataProvider extends Provider
         $this->di->bind('Prepared\MonetizationLedger', function ($di) {
             return new Cassandra\Prepared\MonetizationLedger();
         });
+
+        $this->di->bind('BigQuery', function ($di) {
+            return new BigQuery\Client();
+        }, ['useFactory'=>true]);
     }
 }

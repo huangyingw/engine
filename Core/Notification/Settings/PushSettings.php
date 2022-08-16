@@ -1,16 +1,12 @@
 <?php
 namespace Minds\Core\Notification\Settings;
 
-use Minds\Entities;
-use Minds\Core\Session;
 use Minds\Core\Data;
-use Minds\Core\Events\Dispatcher;
-use Minds\Core\Events\Event;
-use Minds\Core\Notification\Extensions\Push;
-use Minds\Entities\Factory as EntitiesFactory;
 
 class PushSettings
 {
+    protected $db;
+
     protected $types = [
       'daily' => true,
       'comment' => true,
@@ -32,6 +28,7 @@ class PushSettings
       'referral_complete' => true,
       'rewards_summary' => true,
       'custom_message' => true,
+      'community_updates' => true,
     ];
     protected $userGuid;
     protected $toBeSaved = [];

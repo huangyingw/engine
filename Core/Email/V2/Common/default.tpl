@@ -21,6 +21,12 @@
         text-align:left;
         color: #4f4f50;
       }
+      li {
+        margin-bottom: 16px !important;
+      }
+      ul {
+        padding-left: 16px !important;
+      }
       img {
         border: 0;
         height: auto;
@@ -564,7 +570,7 @@
                                               <div style="display: inline-block;">
                                                 Minds Inc
                                                 <span style="white-space: nowrap;"
-                                                  >© 2020</span
+                                                  >© 2021</span
                                                 >
                                               </div>
                                             </div>

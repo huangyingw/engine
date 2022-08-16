@@ -6,7 +6,7 @@ use Minds\Core\Subscriptions\Delegates;
 use Minds\Core\Subscriptions\Manager;
 use Minds\Core\Subscriptions\Repository;
 use Minds\Core\Subscriptions\Subscription;
-use Minds\Core\Suggestions\Delegates\CheckRateLimit;
+use Minds\Core\Subscriptions\Relational;
 use Minds\Entities\User;
 use PhpSpec\ObjectBehavior;
 use Prophecy\Argument;
@@ -19,17 +19,17 @@ class ManagerSpec extends ObjectBehavior
     private $cacheDelegate;
     private $eventsDelegate;
     private $feedsDelegate;
-    private $checkRateLimitDelegate;
+    private $relationalRepo;
 
 
     public function let(
         Repository $repository,
-        Delegates\CopyToElasticSearchDelegate $copyToElasticSearchDelegate = null,
-        Delegates\SendNotificationDelegate $sendNotificationDelegate = null,
-        Delegates\CacheDelegate $cacheDelegate = null,
-        Delegates\EventsDelegate $eventsDelegate = null,
-        Delegates\FeedsDelegate $feedsDelegate = null,
-        CheckRateLimit $checkRateLimitDelegate = null
+        Delegates\CopyToElasticSearchDelegate $copyToElasticSearchDelegate,
+        Delegates\SendNotificationDelegate $sendNotificationDelegate,
+        Delegates\CacheDelegate $cacheDelegate,
+        Delegates\EventsDelegate $eventsDelegate,
+        Delegates\FeedsDelegate $feedsDelegate,
+        Relational\Repository $relationalRepository
     ) {
         $this->beConstructedWith(
             $repository,
@@ -38,7 +38,7 @@ class ManagerSpec extends ObjectBehavior
             $cacheDelegate,
             $eventsDelegate,
             $feedsDelegate,
-            $checkRateLimitDelegate
+            $relationalRepository
         );
         $this->repository = $repository;
         $this->copyToElasticSearchDelegate = $copyToElasticSearchDelegate;
@@ -46,7 +46,7 @@ class ManagerSpec extends ObjectBehavior
         $this->cacheDelegate = $cacheDelegate;
         $this->eventsDelegate = $eventsDelegate;
         $this->feedsDelegate = $feedsDelegate;
-        $this->checkRateLimitDelegate = $checkRateLimitDelegate;
+        $this->relationalRepo = $relationalRepository;
     }
 
     public function it_is_initializable()
@@ -104,8 +104,8 @@ class ManagerSpec extends ObjectBehavior
         $this->cacheDelegate->cache($subscription)
             ->shouldBeCalled();
 
-        // Call the Rate Limit delegate
-        $this->checkRateLimitDelegate->incrementCache(123)
+        // Add to the new sql engine
+        $this->relationalRepo->add($subscription)
             ->shouldBeCalled();
 
         $newSubscription = $this->subscribe($publisher);
@@ -158,6 +158,9 @@ class ManagerSpec extends ObjectBehavior
 
         // Call the cache delegate
         $this->cacheDelegate->cache($subscription)
+            ->shouldBeCalled();
+
+        $this->relationalRepo->delete($subscription)
             ->shouldBeCalled();
 
         $newSubscription = $this->unSubscribe($publisher);

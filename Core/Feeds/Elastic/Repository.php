@@ -2,6 +2,7 @@
 
 namespace Minds\Core\Feeds\Elastic;
 
+use Minds\Core\Config\Config;
 use Minds\Core\Data\ElasticSearch\Client as ElasticsearchClient;
 use Minds\Core\Data\ElasticSearch\Prepared;
 use Minds\Core\Di\Di;
@@ -12,9 +13,9 @@ use Minds\Helpers\Text;
 class Repository
 {
     /* Change to true to output ES query in logs */
-    const DEBUG = false;
+    public const DEBUG = false;
 
-    const PERIODS = [
+    public const PERIODS = [
         '12h' => 43200,
         '24h' => 86400,
         '7d' => 604800,
@@ -39,17 +40,19 @@ class Repository
     /** @var string */
     private $plusSupportTierUrn;
 
+    private Config $config;
+
     public function __construct($client = null, $config = null, $features = null)
     {
         $this->client = $client ?: Di::_()->get('Database\ElasticSearch');
 
-        $config = $config ?: Di::_()->get('Config');
+        $this->config = $config ?? Di::_()->get('Config');
 
         $this->features = $features ?: Di::_()->get('Features\Manager');
 
-        $this->index = $config->get('elasticsearch')['index'];
+        $this->index = $this->config->get('elasticsearch')['indexes']['search_prefix'];
 
-        $this->plusSupportTierUrn = $config->get('plus')['support_tier_urn'];
+        $this->plusSupportTierUrn = $this->config->get('plus')['support_tier_urn'] ?? null;
     }
 
     /**
@@ -103,9 +106,11 @@ class Repository
                         'owner_guid' => $key,
                         $this->getSourceField($type) => $key,
                         '@timestamp' => $doc['_source']['@timestamp'],
+                        'type' => $type,
                     ],
                     '_type' => $type,
                     '_score' => 0,
+                    '_index' => $this->index . '-' . $type,
                 ];
                 $newDocs[$key]['_score'] = log10($newDocs[$key]['_score'] + $algorithm->fetchScore($doc));
             }
@@ -121,7 +126,7 @@ class Repository
             $guids[$guid] = true;
             yield (new ScoredGuid())
                 ->setGuid($doc['_source'][$this->getSourceField($opts['type'])])
-                ->setType($doc['_type'])
+                ->setType(str_replace($this->index . '-', '', $doc['_index']))
                 ->setScore($algorithm->fetchScore($doc))
                 ->setOwnerGuid($doc['_source']['owner_guid'])
                 ->setTimestamp($doc['_source']['@timestamp']);
@@ -198,6 +203,7 @@ class Repository
             'remind_guid' => null,
             // Focus on quotes
             'quote_guid' => null,
+            'include_group_posts' => false,
         ], $opts);
 
         if (!$opts['type']) {
@@ -326,13 +332,24 @@ class Repository
             $should[] = [
                 'terms' => [
                     'owner_guid' => [
-                        'index' => 'minds-graph',
-                        'type' => 'subscriptions',
+                        'index' => 'minds-graph-subscriptions',
                         'id' => (string) $opts['subscriptions'],
                         'path' => 'guids',
                     ],
                 ],
             ];
+
+            if ($opts['include_group_posts']) {
+                $should[] = [
+                    'terms' => [
+                        'container_guid' => [
+                            'index' => $this->index.'-user',
+                            'id' => (string) $opts['subscriptions'],
+                            'path' => 'group_membership',
+                        ],
+                    ]
+                ];
+            }
 
             // Will return own posts if requested
             if ($opts['hide_own_posts']) {
@@ -420,7 +437,7 @@ class Repository
             ];
         }
 
-        if ($type !== 'group' && $opts['access_id'] !== null) {
+        if ($type !== 'group' && $opts['access_id'] !== null && !$opts['include_group_posts']) {
             $body['query']['function_score']['query']['bool']['must'][] = [
                 'terms' => [
                     'access_id' => Text::buildArray($opts['access_id']),
@@ -435,6 +452,31 @@ class Repository
                         'gt' => 2,
                     ]
                 ]
+            ];
+        }
+
+        if ($opts['include_group_posts']) {
+            $body['query']['function_score']['query']['bool']['must'][] = [
+                'bool' => [
+                    'should' => [
+                        [
+                            'range' => [
+                                'access_id' => [
+                                    'gte' => 2,
+                                ],
+                            ],
+                        ],
+                        [
+                            'terms' => [
+                                'access_id' => [
+                                    'index' => $this->index.'-user',
+                                    'id' => (string) $opts['subscriptions'],
+                                    'path' => 'group_membership',
+                                ],
+                            ]
+                        ],
+                    ],
+                ],
             ];
         }
 
@@ -467,14 +509,14 @@ class Repository
         // Time bounds
 
         $timestampUpperBounds = []; // LTE
-        $timestampLowerBounds = []; // GT
+        $timestampLowerBounds = []; // GTE
 
         if ($algorithm->isTimestampConstrain() && static::PERIODS[$opts['period']] > -1) {
             $timestampLowerBounds[] = (time() - static::PERIODS[$opts['period']]) * 1000;
         }
 
         // Will start the feed after this timestamp (used for pagination)
-        if ($opts['from_timestamp']) {
+        if ($opts['from_timestamp'] && !$opts['to_timestamp']) {
             if (!$opts['reverse_sort']) {
                 $timestampUpperBounds[] = (int) $opts['from_timestamp'];
             } else {
@@ -482,16 +524,18 @@ class Repository
             }
         }
 
-        // Will load the feed until this timestamp is reached
-        if ($opts['to_timestamp']) {
+        // Load the feed between these two timestamps
+        if ($opts['from_timestamp'] && $opts['to_timestamp']) {
+            $timestampUpperBounds[] = (int) $opts['from_timestamp'];
             $timestampLowerBounds[] = (int) $opts['to_timestamp'];
         }
 
-        // Used to scenario such as loading scheduled posts
-        if ($opts['future']) {
-            $timestampLowerBounds[] = time() * 1000;
-        } else {
-            $timestampUpperBounds[] = time() * 1000;
+        if (!$opts['to_timestamp']) {
+            if ($opts['future']) {
+                $timestampLowerBounds[] = time() * 1000;
+            } else {
+                $timestampUpperBounds[] = time() * 1000;
+            }
         }
 
         if ($timestampUpperBounds || $timestampLowerBounds) {
@@ -506,7 +550,7 @@ class Repository
             }
 
             if ($timestampLowerBounds) {
-                $range['gt'] = max($timestampLowerBounds);
+                $range['gte'] = max($timestampLowerBounds);
             }
 
             $body['query']['function_score']['query']['bool']['must'][] = [
@@ -560,11 +604,22 @@ class Repository
         }
 
         if ($opts['exclude']) {
-            $body['query']['function_score']['query']['bool']['must_not'][] = [
-                'terms' => [
-                    'guid' => Text::buildArray($opts['exclude']),
-                ],
-            ];
+            if ($opts['demoted']) {
+                $body['query']['function_score']['functions'][] = [
+                    'filter' => [
+                        'terms' => [
+                            'guid' => Text::buildArray($opts['exclude'])
+                        ]
+                    ],
+                    'weight' => $this->config->get('seen-entities-weight') ?? 0.01
+                ];
+            } else {
+                $body['query']['function_score']['query']['bool']['must_not'][] = [
+                    'terms' => [
+                        'guid' => Text::buildArray($opts['exclude']),
+                    ],
+                ];
+            }
         }
 
 
@@ -651,19 +706,33 @@ class Repository
 
         //
 
-        $esType = $opts['type'];
+        $esType = $opts['type'] ?: 'all';
 
-        if ($type === 'user' || $type === 'group') {
-            $esType = 'activity,object:image,object:video,object:blog';
-        }
+        $index = $this->index . '-';
 
         if ($esType === 'all') {
-            $esType = 'object:image,object:video,object:blog';
+            $index = implode(',', array_map(function ($type) {
+                return $this->index . '-' . $type;
+            }, [
+                'activity',
+                'object-image',
+                'object-video',
+                'object-blog',
+            ]));
+        } elseif ($esType === 'object-*') {
+            $index = implode(',', array_map(function ($type) {
+                return $this->index . '-' . $type;
+            }, [
+                'object-image',
+                'object-video',
+                'object-blog',
+            ]));
+        } else {
+            $index .= $esType;
         }
 
         $query = [
-            'index' => $this->index,
-            'type' => $esType,
+            'index' => $index,
             'body' => $body,
             'size' => $opts['limit'],
             'from' => $opts['offset'],

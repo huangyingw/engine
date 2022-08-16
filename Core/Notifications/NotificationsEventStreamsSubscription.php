@@ -223,17 +223,18 @@ class NotificationsEventStreamsSubscription implements SubscriptionInterface
                     'group_urn' => $event->getActionData()['group_urn']
                 ]);
                 break;
-            case ActionEvent::ACTION_GROUP_QUEUE_REJECT:
-                $notification->setType(NotificationTypes::TYPE_GROUP_QUEUE_REJECT);
-                $notification->setData([
-                    'group_urn' => $event->getActionData()['group_urn']
-                ]);
-                break;
+            // Doesn't work bc post gets deleted immediately when rejected
+            // case ActionEvent::ACTION_GROUP_QUEUE_REJECT:
+            //     $notification->setType(NotificationTypes::TYPE_GROUP_QUEUE_REJECT);
+            //     $notification->setData([
+            //         'group_urn' => $event->getActionData()['group_urn']
+            //     ]);
+            //     break;
             case ActionEvent::ACTION_WIRE_SENT:
                 /** @var Wire */
                 $wire = $entity;
-                $isPlusPayout = (string) $wire->getSender()->getGuid() === (string) $this->config->get('plus')['handler'];
-                $isProPayout = (string) $wire->getSender()->getGuid() === (string) $this->config->get('pro')['handler'];
+                $isPlusPayout = (string) $wire->getSender()->getGuid() === (string) $this->config->get('plus')['handler'] ?? '';
+                $isProPayout = (string) $wire->getSender()->getGuid() === (string) $this->config->get('pro')['handler'] ?? '';
 
                 if ($isPlusPayout || $isProPayout) {
                     $notification->setType(NotificationTypes::TYPE_WIRE_PAYOUT);

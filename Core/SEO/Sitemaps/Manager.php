@@ -23,9 +23,9 @@ class Manager
 
     protected $resolvers = [
         Resolvers\MarketingResolver::class,
+        Resolvers\DiscoveryResolver::class,
         Resolvers\ActivityResolver::class,
         Resolvers\UsersResolver::class,
-        Resolvers\HelpdeskResolver::class,
         Resolvers\BlogsResolver::class,
     ];
 
@@ -70,8 +70,8 @@ class Manager
             }
         }
 
-        $this->generator->createSitemap();
-        $this->generator->writeSitemap();
+        $this->generator->flush();
+        $this->generator->finalize();
 
         // Upload to s3
         $this->uploadToS3();

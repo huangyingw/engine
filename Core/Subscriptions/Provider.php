@@ -15,6 +15,15 @@ class Provider extends DiProvider
             return new Manager();
         }, [ 'useFactory'=>false ]);
 
+        // Relational
+
+        $this->di->bind('Subscriptions\Relational\Controller', function ($di) {
+            return new Relational\Controller();
+        }, [ 'useFactory'=>false ]);
+        $this->di->bind('Subscriptions\Relational\Repository', function ($di) {
+            return new Relational\Repository();
+        }, [ 'useFactory'=>false ]);
+
         // Graph
 
         $this->di->bind('Subscriptions\Graph\Controller', function ($di) {

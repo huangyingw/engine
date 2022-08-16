@@ -12,11 +12,11 @@ use Minds\Interfaces;
 
 class deeplinks implements Interfaces\Api, Interfaces\ApiIgnorePam
 {
-    private $applinks = [
+    protected $applinks = [
         'activitycontinuation' => [
             "apps" => [
-              "35U3998VRZ.com.minds.mobile",
-              "35U3998VRZ.com.minds.chat"
+                "35U3998VRZ.com.minds.mobile",
+                "35U3998VRZ.com.minds.chat"
             ]
         ],
         'applinks' => [
@@ -41,10 +41,15 @@ class deeplinks implements Interfaces\Api, Interfaces\ApiIgnorePam
                 ],
                 [
                     'appID' => '35U3998VRZ.com.minds.chat',
-                    'paths' => [ '/*' ]
+                    'paths' => ['/*']
                 ]
             ]
-        ]
+        ],
+        'webcredentials' => [
+            'apps' => [
+                '35U3998VRZ.com.minds.mobile',
+            ]
+        ],
     ];
 
     /**

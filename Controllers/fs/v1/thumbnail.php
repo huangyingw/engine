@@ -31,11 +31,14 @@ class thumbnail extends Core\page implements Interfaces\page
             ]);
         }
 
+        $unlockPaywall = false;
+
         $signedUri = new Core\Security\SignedUri();
         $req = \Zend\Diactoros\ServerRequestFactory::fromGlobals();
         if ($req->getQueryParams()['jwtsig'] ?? null) {
             if ($signedUri->confirm((string) $req->getUri())) {
                 Core\Security\ACL::$ignore = true;
+                $unlockPaywall = (bool) $_GET['unlock_paywall'] ?? 0;
             }
         }
 
@@ -55,7 +58,12 @@ class thumbnail extends Core\page implements Interfaces\page
         /** @var Core\Media\Thumbnails $mediaThumbnails */
         $mediaThumbnails = Di::_()->get('Media\Thumbnails');
 
-        $thumbnail = $mediaThumbnails->get($entity, $size, ['bypassPaywall' => true]);
+        $opts = [
+            'bypassPaywall' => true, // Bypasses payment amount check.
+            'unlockPaywall' => $unlockPaywall, // Stops blurred image being set.
+        ];
+
+        $thumbnail = $mediaThumbnails->get($entity, $size, $opts);
 
         if ($thumbnail instanceof \ElggFile) {
             $thumbnail->open('read');
@@ -63,29 +71,14 @@ class thumbnail extends Core\page implements Interfaces\page
 
             if (!$contents && $size) {
                 // Size might not exist
-                $thumbnail = $mediaThumbnails->get($pages[0], null);
+                $thumbnail = $mediaThumbnails->get($pages[0], null, $opts);
                 $thumbnail->open('read');
                 $contents = $thumbnail->read();
             }
 
-            // Blur the image if paywalled
-            // TODO: Consider moving this logic to a new controller
-
-            $paywallManager = Di::_()->get('Wire\Paywall\Manager');
-
-            if ($paywallManager->isPaywalled($entity) && !$entity instanceof Video) {
-                $allowed = $paywallManager
-                    ->setUser(Core\Session::getLoggedInUser())
-                    ->isAllowed($entity);
-                $unlock = $_GET['unlock_paywall'] ?? false;
-
-                if (!($unlock && $allowed)) {
-                    $imagick = new \Imagick();
-                    $imagick->readImageBlob($contents);
-                    $imagick->setType('jpeg');
-                    $imagick->blurImage(100, 500);
-                    $contents = $imagick->getImageBlob();
-                }
+            // if media was locked and empty return the default blurred
+            if (!$contents && $mediaThumbnails->isLocked($entity)) {
+                $contents = file_get_contents($mediaThumbnails->getDefaultBlurred());
             }
 
             try {

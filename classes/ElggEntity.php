@@ -1,6 +1,8 @@
 <?php
 
 use Minds\Entities\EntityInterface;
+use Minds\Helpers\StringLengthValidators\MessageLengthValidator;
+use Minds\Helpers\StringLengthValidators\TitleLengthValidator;
 
 /**
  * The parent class for all Elgg Entities.
@@ -835,6 +837,16 @@ abstract class ElggEntity extends ElggData implements
     }
 
     /**
+     * Setter for access_id.
+     * @return self instance of this.
+     */
+    public function setAccessId(string $accessId): self
+    {
+        $this->access_id = $accessId;
+        return $this;
+    }
+
+    /**
      * Returns the guid.
      *
      * @return int|null GUID
@@ -1110,10 +1122,12 @@ abstract class ElggEntity extends ElggData implements
      */
     public function save($timebased = true)
     {
+        $isUpdate = false;
         if ($this->guid) {
             if (!$this->canEdit()) {
                 return false;
             }
+            $isUpdate = true;
             $this->time_updated = time();
             elgg_trigger_event('update', $this->type, $this);
             //@todo review... memecache actually make us slower anyway.. do we need it?
@@ -1139,6 +1153,11 @@ abstract class ElggEntity extends ElggData implements
                 $db->insert($index, $data);
             }
         }
+
+        \Minds\Core\Events\Dispatcher::trigger('entities-ops', $isUpdate ? 'update' : 'create', [
+            'entityUrn' => $this->getUrn()
+        ]);
+
         return $this->guid;
     }
 
@@ -1283,14 +1302,9 @@ abstract class ElggEntity extends ElggData implements
                 $db->removeAttributes($rowkey, [$this->guid], false);
             }
 
-            Minds\Core\Queue\Client::build()->setQueue("FeedCleanup")
-            ->send([
-                "guid" => $this->guid,
-                "owner_guid" => $this->owner_guid,
-                                "type" => $this->type,
-                                "subtype" => $this->subtype,
-                                "super_subtype" => $this->super_subtype
-                ]);
+            \Minds\Core\Events\Dispatcher::trigger('entities-ops', 'delete', [
+                'entityUrn' => $this->getUrn()
+            ]);
 
             return true;
         }
@@ -1444,6 +1458,14 @@ abstract class ElggEntity extends ElggData implements
         $export['nsfw_lock'] = $this->getNsfwLock();
         $export['urn'] = $this->getUrn();
         $export['allow_comments'] = $this->getAllowComments();
+
+        if (isset($export['title'])) {
+            $export['title'] = (new TitleLengthValidator())->validateMaxAndTrim($export['title']);
+        }
+        if (isset($export['message'])) {
+            $export['message'] = (new MessageLengthValidator())->validateMaxAndTrim($export['message']);
+        }
+
         return $export;
     }
 
@@ -1535,7 +1557,7 @@ abstract class ElggEntity extends ElggData implements
     {
         // There is a bug on mobile that is sending the hashtags with the hash, this shouldnt happen
         $this->tags = array_map(function ($tag) {
-            return str_replace('#', '', $tag);
+            return (string) str_replace('#', '', $tag);
         }, $this->tags ?: []);
         return $this->tags ?: [];
     }
@@ -1746,5 +1768,25 @@ abstract class ElggEntity extends ElggData implements
     public function getAllowComments()
     {
         return (bool) $this->allow_comments;
+    }
+
+    /**
+     * Set the source if externally imported
+     * @param string $source - eg. nostr
+     * @return self
+     */
+    public function setSource(string $source): self
+    {
+        $this->source = $source;
+        return $this;
+    }
+
+    /**
+     * Returns the origin/source, eg. nostr
+     * @return string
+     */
+    public function getSource(): string
+    {
+        return $this->source;
     }
 }

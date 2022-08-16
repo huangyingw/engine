@@ -3,6 +3,9 @@
  * Bootstraps Minds engine
  */
 
+use Minds\Interfaces\SentryExceptionExclusionInterface;
+use Stripe\Exception\RateLimitException;
+
 /**
  * The time with microseconds when the Minds engine was started.
  *
@@ -25,6 +28,21 @@ Sentry\init([
     'release' => getenv('MINDS_VERSION') ?: 'Unknown',
     'environment' => getenv('MINDS_ENV') ?: 'development',
     'send_default_pii' => false,
+    'before_send' => function (\Sentry\Event $event, ?\Sentry\EventHint $hint): ?\Sentry\Event {
+        $exclusions = [
+            RateLimitException::class,
+            SentryExceptionExclusionInterface::class
+        ];
+
+        if ($hint !== null) {
+            if (array_filter($exclusions, function (string $value, int $key) use ($hint) {
+                return $hint->exception instanceof $value;
+            }, ARRAY_FILTER_USE_BOTH)) {
+                return null;
+            }
+        }
+        return $event;
+    },
 ]);
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);

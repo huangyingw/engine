@@ -7,7 +7,7 @@ $CONFIG->minds_debug = true;
 /*
  * Cassandra configuration
  */
-$CONFIG->cassandra = (object) [
+$CONFIG->cassandra = [
     'keyspace' => '{{cassandra-keyspace}}',
     'servers' => ['{{cassandra-server}}'],
     'cql_servers' => ['{{cassandra-server}}'],
@@ -31,6 +31,7 @@ $CONFIG->set('pulsar', [
     'host' => 'pulsar',
     'port' => 6650,
     'ssl' => false,
+    'ssl_skip_verify' => false,
     //'ssl_cert_path' => '',
 ]);
 
@@ -54,100 +55,100 @@ $CONFIG->set('oauth', [
         ],
     ],
     'encryption_key' => '{{ jwt-secret }}',
- ]);
+]);
 
 $CONFIG->set(
     'report_reasons',
     [
-    [
-      'value' => 1,
-      'label' => 'Illegal',
-      'hasMore' => true,
-      'reasons' => [
-        ['value' => 1, 'label' => 'Terrorism'],
-        ['value' => 2, 'label' => 'Paedophilia'],
-        ['value' => 3, 'label' => 'Extortion'],
-        ['value' => 4, 'label' => 'Fraud'],
-        ['value' => 5, 'label' => 'Revenge Porn'],
-        ['value' => 6, 'label' => 'Sex trafficking'],
-      ],
-    ],
-    [
-      'value' => 2,
-      'label' => 'NSFW (not safe for work)',
-      'hasMore' => true,
-      'reasons' => [ // Explicit reasons
-        ['value' => 1, 'label' => 'Nudity'],
-        ['value' => 2, 'label' => 'Pornography'],
-        ['value' => 3, 'label' => 'Profanity'],
-        ['value' => 4, 'label' => 'Violance and Gore'],
-        ['value' => 5, 'label' => 'Race, Religion, Gender'],
-      ],
-    ],
-    [
-      'value' => 3,
-      'label' => 'Encourages or incites violence',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 4,
-      'label' => 'Harassment',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 5,
-      'label' => 'Personal and confidential information',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 7,
-      'label' => 'Impersonates',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 8,
-      'label' => 'Spam',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 10,
-      'label' => 'Infringes my copyright',
-      'hasMore' => true,
-    ],
-    [
-      'value' => 12,
-      'label' => 'Incorrect use of hashtags',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 13,
-      'label' => 'Malware',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 15,
-      'label' => 'Trademark infringement',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 16,
-      'label' => 'Token manipulation',
-      'hasMore' => false,
-    ],
-    [
-      'value' => 17,
-      'label' => 'Security',
-      'hasMore' => true,
-      'reasons' => [
-        ['value' => 1, 'label' => 'Hacked account']
-      ],
-    ],
-    ['value' => 11,
-     'label' => 'Another reason',
-     'hasMore' => true,
-    ],
+        [
+            'value' => 1,
+            'label' => 'Illegal',
+            'hasMore' => true,
+            'reasons' => [
+                ['value' => 1, 'label' => 'Terrorism'],
+                ['value' => 2, 'label' => 'Paedophilia'],
+                ['value' => 3, 'label' => 'Extortion'],
+                ['value' => 4, 'label' => 'Fraud'],
+                ['value' => 5, 'label' => 'Revenge Porn'],
+                ['value' => 6, 'label' => 'Sex trafficking'],
+            ],
+        ],
+        [
+            'value' => 2,
+            'label' => 'NSFW (not safe for work)',
+            'hasMore' => true,
+            'reasons' => [ // Explicit reasons
+                ['value' => 1, 'label' => 'Nudity'],
+                ['value' => 2, 'label' => 'Pornography'],
+                ['value' => 3, 'label' => 'Profanity'],
+                ['value' => 4, 'label' => 'Violance and Gore'],
+                ['value' => 5, 'label' => 'Race, Religion, Gender'],
+            ],
+        ],
+        [
+            'value' => 3,
+            'label' => 'Encourages or incites violence',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 4,
+            'label' => 'Harassment',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 5,
+            'label' => 'Personal and confidential information',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 7,
+            'label' => 'Impersonates',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 8,
+            'label' => 'Spam',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 10,
+            'label' => 'Infringes my copyright',
+            'hasMore' => true,
+        ],
+        [
+            'value' => 12,
+            'label' => 'Incorrect use of hashtags',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 13,
+            'label' => 'Malware',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 15,
+            'label' => 'Trademark infringement',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 16,
+            'label' => 'Token manipulation',
+            'hasMore' => false,
+        ],
+        [
+            'value' => 17,
+            'label' => 'Security',
+            'hasMore' => true,
+            'reasons' => [
+                ['value' => 1, 'label' => 'Hacked account']
+            ],
+        ],
+        ['value' => 11,
+            'label' => 'Another reason',
+            'hasMore' => true,
+        ],
 
-  ]
+    ]
 );
 
 /*
@@ -180,16 +181,33 @@ $CONFIG->system_cache_path = '{{cache-path}}';
 /*
  * Elasticsearch Settings
  */
-//server for elasticsearch
-$CONFIG->elasticsearch_server = '{{elasticsearch-server}}';
-//namespace
-$CONFIG->elasticsearch_prefix = '{{elasticsearch-prefix}}';
+
 
 $CONFIG->elasticsearch = [
     'hosts' => ['elasticsearch'],
     'index' => 'minds_badger',
     'metrics_index' => 'minds-metrics',
     'tags_index' => 'minds-trending-hashtags',
+    // ES 7.x
+    'indexes' => [
+        'search_prefix' => 'minds-search',
+        'boost' => 'minds-boost',
+        'graph' => 'minds-graph',
+        'metrics' => 'minds-metrics',
+        'tags' => 'minds-hashtags',
+        'clustered_entities' => 'minds-clustered-entities-feed'
+    ],
+    'username' => null,
+    'password' => null,
+    'cert' => '/var/secure/elasticsearch.crt',
+];
+
+// Vitess (MySQL) configuration
+$CONFIG->mysql = [
+    'host' => 'vitess:15306',
+    'db' => 'minds',
+    'user' => 'user',
+    'ssl_skip_verify' => true,
 ];
 
 /*
@@ -204,11 +222,11 @@ $CONFIG->elasticsearch = [
  * or higher with PECL library > 2.0.0
  */
 
- /*$CONFIG->memcache = true;
+/*$CONFIG->memcache = true;
 
 $CONFIG->memcache_servers = array (
-    array('server1', 11211),
-    array('server2', 11211)
+   array('server1', 11211),
+   array('server2', 11211)
 );*/
 
 /*
@@ -239,14 +257,16 @@ $CONFIG->broken_mta = false;
 $CONFIG->min_password_length = 6;
 
 $CONFIG->set('plugins', [
-  'Messenger',
-  'oauth2',
-  'guard',
+    'Messenger',
+    'oauth2',
+    'guard',
 ]);
 
-$CONFIG->set('sockets-jwt-secret', '{{jwt-secret}}');
-$CONFIG->set('sockets-jwt-domain', '{{jwt-domain}}');
-$CONFIG->set('sockets-server-uri', '{{socket-server-uri}}');
+$CONFIG->set('sockets', [
+    'jwt_secret' => '{{jwt-secret}}',
+    'jwt_domain' => '{{jwt-domain}}',
+    'server_uri' => '{{socket-server-uri}}'
+]);
 
 $CONFIG->set('facebook', [
     'app_id' => '{{facebook-app-id}}',
@@ -256,12 +276,17 @@ $CONFIG->set('facebook', [
 $CONFIG->set('twitter', [
     'api_key' => '{{twitter-app-id}}',
     'api_secret' => '{{twitter-app-id}}',
+    'bearer_token' => '',
+    'min_followers_for_sync' => 25000,
 ]);
 
 $CONFIG->set('twilio', [
     'account_sid' => '{{twilio-account-sid}}',
     'auth_token' => '{{twilio-auth-token}}',
     'from' => '{{twilio-from}}',
+    'verify' => [
+        'service_sid' => '{{verify-service-sid}}'
+    ]
 ]);
 
 $CONFIG->set('google', [
@@ -270,7 +295,7 @@ $CONFIG->set('google', [
     'push' => '{{google-api-key}}',
     'analytics' => [
         'service_account' => [
-            'key_path' => __DIR__.'/.auth/analytics.json',
+            'key_path' => __DIR__ . '/.auth/analytics.json',
         ],
         'ads' => '', // get it from https://ga-dev-tools.appspot.com/account-explorer/
     ],
@@ -278,6 +303,10 @@ $CONFIG->set('google', [
     'youtube' => [
         'api_key' => '{{yt-api-key}}',
         'max_daily_imports' => 10,
+    ],
+    'bigquery' => [
+        'project_id' => '',
+        'key_file_path' =>  __DIR__ . '/.auth/bigquery.json'
     ],
 ]);
 
@@ -316,7 +345,7 @@ $CONFIG->set('payouts', [
     'retentionDays' => 40,
     'minimumAmount' => 100,
     'userPercentage' => 0.8,
- ]);
+]);
 
 $CONFIG->set('payments', [
     'stripe' => [
@@ -389,7 +418,7 @@ $CONFIG->set('blockchain', [
             'wallet_address' => '0x4CDc1C1fd1A3F4DD63231afF8c16501BcC11Df95',
             'wallet_pkey' => '',
         ],
-     ],
+    ],
 
     'eth_rate' => 2000, //1 ETH = 2,000 TOKENS
 
@@ -411,7 +440,28 @@ $CONFIG->set('blockchain', [
         'environment' => 'staging',
     ],
 
-    'mw3' => '/usr/bin/env node '.__MINDS_ROOT__.'/../mw3/index.js',
+    'mw3' => '/usr/bin/env node ' . __MINDS_ROOT__ . '/../mw3/index.js',
+
+    'web3_service' => [
+        'wallet_encryption_key' => '',
+        'base_url' => 'http://192.168.0.16:3333/'
+    ],
+
+    'skale' => [
+        'development_mode' => true,
+        'rpc_endpoints' => [
+            'https://testnet-proxy.skalenodes.com/v1/whispering-turais'
+        ],
+        'minds_token_address' => '0x4E8792878Bd0CC7a19d2a5Bb345Ab18a6624c866',
+        'gas_price_wei' => 100000,
+        'default_sfuel_distributor_guid' => '1285556080390180877',
+        'default_sfuel_distribution_amount_wei' => 220000000000,
+        'sfuel_low_threshold' => 8801000000,
+        'transfer_gas_limit' => 51280,
+        'confirmation_timeout_seconds' => 60,
+        'confirmation_polling_gap_seconds' => 5,
+        'balance_cache_ttl_seconds' => 60
+    ],
 ]);
 
 $CONFIG->set('blockchain_override', [
@@ -504,9 +554,20 @@ $CONFIG->set('tags', [
     'art', 'music', 'journalism', 'blockchain', 'freespeech', 'news', 'gaming', 'myphoto', 'nature', 'photography', 'politics', 'top', 'bitcoin', 'technology', 'food', 'animals', 'health', 'science', 'philosophy', 'comedy', 'film', 'minds',
 ]);
 
+// served initially only when under minds-3216-default-tags-v2 - should eventually replace v1 tags.
+$CONFIG->set('tags_v2', [
+    'Animals', 'Anime', 'Art', 'Comedy', 'Crypto', 'Food', 'Freedom', 'Gaming', 'Literature', 'Memes', 'Movies', 'Music', 'Nature', 'NSFW', 'News', 'Outdoors', 'Photography', 'Politics', 'Religion', 'Sports', 'Technology', 'Travel'
+]);
+
 $CONFIG->set('steward_guid', '');
 $CONFIG->set('steward_autoconfirm', false);
 $CONFIG->set('development_mode', '{{development_mode}}');
+
+// load discovery content irrespective of activity levels.
+$CONFIG->set('discovery_development_mode', true);
+
+// Show tags that are not trending in last 24h.
+$CONFIG->set('trending_tags_development_mode', true);
 
 $CONFIG->set('max_video_length', 900);
 
@@ -530,9 +591,20 @@ $CONFIG->set('features', [
     'wallet-upgrade' => true,
     'subscriber-conversations' => true,
     'activity-modal' => false,
+    'withdrawal-console' => true,
+    'twilio-verify' => true,
+    'helpdesk-2021' => true,
+    'discovery-default-tags' => true,
+    'skale' => true,
+    'polygon' => true,
+    'web3-service-withdrawals' => false,
 ]);
 
 $CONFIG->set('email', [
+    'sender' => [
+        'email' => 'no-reply@minds.com',
+        'name' => 'Minds'
+    ],
     'smtp' => [
         'host' => '',
         'username' => '',
@@ -679,6 +751,9 @@ $CONFIG->set('unleash', [
 $CONFIG->set('captcha', [
     'jwt_secret' => '{{site-secret}}',
     'bypass_key' => '{{site-secret}}',
+    'friendly_captcha' => [
+        'signing_secret' => '{{site-secret}}',
+    ]
 ]);
 
 $CONFIG->set('cypress', [
@@ -705,4 +780,60 @@ $CONFIG->set('snowplow', [
 $CONFIG->set('arweave', [
     'host' => 'host.docker.internal',
     'port' => 5000,
+]);
+
+/* In characters */
+$CONFIG->set('max_name_length', 50);
+
+
+$CONFIG->SET('zendesk', [
+    'private_key' => '',
+    'url' => [
+        'base' => '',
+        'jwt_route' => 'access/jwt'
+    ]
+]);
+
+$CONFIG->set('statuspage_io', [
+    'url' => 'https://status.minds.com/'
+]);
+
+$CONFIG->set('default_recommendations_user', '100000000000000519');
+
+$CONFIG->set('growthbook', [
+    'features_endpoint' => 'https://growthbook-api.minds.com/api/features/key_c98323bd51a6b3ab',
+]);
+
+$CONFIG->set('user_quality_score', [
+    'belowSpamRiskThreshold' => 0.4
+]);
+
+$CONFIG->set('did', [
+    'domain' => 'localhost:8080',
+    'uniresolver' => [
+        'base_url' => 'https://dev.uniresolver.io/',
+    ]
+]);
+
+$CONFIG->set('webpush_vapid_details', [
+    'public_key' => "{{webpush_vapid_public_key}}",
+    'private_key' => "{{webpush_vapid_private_key}}",
+    'subject' => "{{webpush_vapid_subject}}"
+]);
+
+$CONFIG->set('seen-entities-weight', 0.01);
+
+$CONFIG->set('survey_links', [
+    'post_signup' => '',
+]);
+
+$CONFIG->set('metascraper', [
+    'base_url' => 'metascraper:3334/',
+    'ttl_seconds' => 86400,
+    'request_timeout' => 30,
+    'bypass_cache' => true
+]);
+
+$CONFIG->set('jury', [
+    'development_mode' => false
 ]);

@@ -3,10 +3,11 @@
 
 namespace Minds\Core;
 
-use Minds\Entities\Factory;
-use Minds\Entities\User;
 use Minds\Core\Data;
 use Minds\Core\Di\Di;
+use Minds\Entities\Entity;
+use Minds\Entities\Factory;
+use Minds\Entities\User;
 
 class EntitiesBuilder
 {
@@ -36,7 +37,7 @@ class EntitiesBuilder
      */
     public function getByUserByIndex(string $key): ?User
     {
-        $values = $this->lookup->get($key);
+        $values = $this->lookup->get(strtolower($key));
 
         $userGuid = key($values);
         $user = $this->single($userGuid);
@@ -73,7 +74,7 @@ class EntitiesBuilder
      * Builds an entity object based on the values passed (GUID, array, object, etc)
      * @param  mixed  $row
      * @param  bool   $cache - cache or load from cache?
-     * @return Entity
+     * @return Entity|null
      */
     public function build($row, $cache = true)
     {
@@ -110,6 +111,8 @@ class EntitiesBuilder
         } elseif (is_subclass_of($default, "Minds\\Entities\\DenormalizedEntity") || is_subclass_of($default, "Minds\\Entities\\NormalizedEntity")) {
             return (new $default())->loadFromArray((array) $row);
         }
+
+        return null;
     }
 
     /**

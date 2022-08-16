@@ -15,6 +15,7 @@ use Minds\Core\Blockchain\LiquidityPositions;
 use Minds\Core\Blockchain\Services\BlockFinder;
 use Minds\Core\Blockchain\Token;
 use Minds\Core\Blockchain\Wallets\OnChain\UniqueOnChain;
+use Minds\Core\Blockchain\Wallets\OnChain\UniqueOnChain\UniqueOnChainAddress;
 use Minds\Core\Di\Di;
 use Minds\Entities\User;
 use Minds\Core\Guid;
@@ -69,6 +70,9 @@ class Manager
 
     /** @var UniqueOnChain\Manager */
     protected $uniqueOnChainManager;
+
+    /** @var BlockFinder */
+    protected $blockFinder;
 
     /** @var Token */
     protected $token;
@@ -240,7 +244,7 @@ class Manager
 
             // Get yesterday RewardEntry
             $yesterdayRewardEntry = $this->getPreviousRewardEntry($rewardEntry, 1);
-            $multiplier = $yesterdayRewardEntry ? $this->calculateMultiplier($yesterdayRewardEntry, static::REWARD_TYPE_LIQUIDITY) : BigDecimal::of(1);
+            $multiplier = $yesterdayRewardEntry ? $this->calculateMultiplier($yesterdayRewardEntry) : BigDecimal::of(1);
             
             $score = $liquiditySummary->getUserLiquidityTokens()->multipliedBy($multiplier);
             
@@ -264,7 +268,7 @@ class Manager
 
             /** @var User */
             $user = $this->entitiesBuilder->single($uniqueOnChain->getUserGuid());
-            if (!$user) {
+            if (!$user || !$user instanceof User) {
                 continue;
             }
 
@@ -273,9 +277,11 @@ class Manager
                 continue;
             }
 
-            $tokenBalance = $this->token->fromTokenUnit(
-                $this->token->balanceOf($uniqueOnChain->getAddress(), $blockNumber)
-            );
+            if (strtolower($uniqueOnChain->getAddress()) !== strtolower($user->getEthWallet())) {
+                continue;
+            }
+
+            $tokenBalance = $this->getTokenBalance($uniqueOnChain, $blockNumber);
 
             $rewardEntry = new RewardEntry();
             $rewardEntry->setUserGuid($user->getGuid())
@@ -284,7 +290,7 @@ class Manager
 
             // Get yesterday RewardEntry
             $yesterdayRewardEntry = $this->getPreviousRewardEntry($rewardEntry, 1);
-            $multiplier = $yesterdayRewardEntry ? $this->calculateMultiplier($yesterdayRewardEntry, static::REWARD_TYPE_HOLDING) : BigDecimal::of(1);
+            $multiplier = $yesterdayRewardEntry ? $this->calculateMultiplier($yesterdayRewardEntry) : BigDecimal::of(1);
 
             $score = BigDecimal::of($tokenBalance)->multipliedBy($multiplier);
 
@@ -311,15 +317,40 @@ class Manager
         ////
 
         foreach ($this->repository->getIterator($opts) as $i => $rewardEntry) {
-            if ($rewardEntry->getSharePct() === (float) 0) {
-                continue;
+
+            // Confirm the wallet address is still connected
+            if (in_array($rewardEntry->getRewardType(), [static::REWARD_TYPE_LIQUIDITY, static::REWARD_TYPE_HOLDING], false)) {
+                /** @var User */
+                $user = $this->entitiesBuilder->single($rewardEntry->getUserGuid());
+                if (!$user || !$this->uniqueOnChainManager->isUnique($user)) {
+                    // do not issue payout
+
+                    $rewardEntry->setScore(BigDecimal::of(0));
+                    $rewardEntry->setTokenAmount(BigDecimal::of(0));
+                    $this->repository->update($rewardEntry, [ 'token_amount', 'score' ]);
+
+                    $this->logger->info("[$i]: Clearing score and token amount for {$rewardEntry->getUserGuid()}. Address isn't unique.", [
+                        'userGuid' => $rewardEntry->getUserGuid(),
+                        'reward_type' => $rewardEntry->getRewardType(),
+                    ]);
+                    continue;
+                }
             }
 
             // Get the pool
             $tokenomicsManifest = $this->getTokenomicsManifest($rewardEntry->getTokenomicsVersion());
             $tokenPool = BigDecimal::of($tokenomicsManifest->getDailyPools()[$rewardEntry->getRewardType()]);
 
-            $tokenAmount = $tokenPool->multipliedBy($rewardEntry->getSharePct(), 18, RoundingMode::FLOOR);
+            if ($rewardEntry->getSharePct() === (float) 0) {
+                $tokenAmount = BigDecimal::of(0); // If share % 0 then reset token amount
+            } else {
+                $tokenAmount = $tokenPool->multipliedBy($rewardEntry->getSharePct(), 18, RoundingMode::FLOOR);
+            }
+
+            // Do not allow negative rewards to be issued
+            if ($tokenAmount->isLessThanOrEqualTo(0)) {
+                $tokenAmount = BigDecimal::of(0);
+            }
 
             $rewardEntry->setTokenAmount($tokenAmount);
             $this->repository->update($rewardEntry, [ 'token_amount' ]);
@@ -364,6 +395,11 @@ class Manager
 
         foreach ($this->repository->getIterator($opts) as $i => $rewardEntry) {
             if ($rewardEntry->getTokenAmount()->toFloat() === (float) 0) {
+                continue;
+            }
+            
+            // Do not payout again if we have already issued a payout
+            if ($rewardEntry->getPayoutTx()) {
                 continue;
             }
 
@@ -477,7 +513,7 @@ class Manager
             'contract' => 'offchain:reward',
         ]);
 
-        if ($transactions['transactions']) {
+        if (count($transactions['transactions'] ?? []) > 0) {
             throw new \Exception("Already issued rewards to this user");
         }
 
@@ -558,5 +594,24 @@ class Manager
 
         $this->txRepository->add($transaction);
         return $transaction;
+    }
+
+    /**
+     * Gets token balance if one is not already set.
+     * @param UniqueOnChainAddress $uniqueOnChainAddress - unique onchain address object.
+     * @param integer $blockNumber - block number to check for.
+     * @return string - balance as string.
+     */
+    private function getTokenBalance(UniqueOnChainAddress $uniqueOnChainAddress, int $blockNumber): string
+    {
+        // if already set, just return the set value.
+        if ($tokenBalance = $uniqueOnChainAddress->getTokenBalance()) {
+            return $tokenBalance;
+        }
+
+        // else lookup the token balance via RPC.
+        return $this->token->fromTokenUnit(
+            $this->token->balanceOf($uniqueOnChainAddress->getAddress(), $blockNumber)
+        );
     }
 }

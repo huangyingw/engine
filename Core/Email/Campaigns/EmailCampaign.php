@@ -15,6 +15,8 @@ abstract class EmailCampaign
     protected $campaign;
     protected $topic;
 
+    protected $state;
+
     /**
      * @var Manager
      */
@@ -24,6 +26,11 @@ abstract class EmailCampaign
      * @var User
      */
     protected $user;
+
+    public function __construct($manager = null)
+    {
+        $this->manager = $manager ?? new Manager();
+    }
 
     /**
      * @param User $user
@@ -36,7 +43,7 @@ abstract class EmailCampaign
     }
 
     /**
-     * @return Message
+     * @return Message|void
      */
     abstract public function send();
 

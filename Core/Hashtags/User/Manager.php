@@ -7,14 +7,15 @@ use Minds\Core\Data\cache\abstractCacher;
 use Minds\Core\Di\Di;
 use Minds\Core\Hashtags\HashtagEntity;
 use Minds\Core\Hashtags\Trending\Repository as TrendingRepository;
+use Minds\Core\Experiments\Manager as ExperimentsManager;
 use Minds\Entities\User;
 
 class Manager
 {
-    /** @var User $user */
+    /** @var User */
     private $user;
 
-    /** @var Repository $repository */
+    /** @var Repository */
     private $repository;
 
     /** @var TrendingRepository */
@@ -23,15 +24,26 @@ class Manager
     /** @var abstractCacher */
     private $cacher;
 
-    /** @var Config $config */
+    /** @var Config */
     private $config;
 
-    public function __construct($repository = null, $trendingRepository = null, $cacher = null, $config = null)
-    {
+    /** @var PseudoHashtags */
+    private $pseudoHashtags;
+
+    public function __construct(
+        $repository = null,
+        $trendingRepository = null,
+        $cacher = null,
+        $config = null,
+        PseudoHashtags $pseudoHashtags = null,
+        private ?ExperimentsManager $experimentsManager = null
+    ) {
         $this->repository = $repository ?: new Repository;
         $this->trendingRepository = $trendingRepository ?: new TrendingRepository;
         $this->cacher = $cacher ?: Di::_()->get('Cache');
         $this->config = $config ?: Di::_()->get('Config');
+        $this->pseudoHashtags = $pseudoHashtags ?? new PseudoHashtags();
+        $this->experimentsManager ??= Di::_()->get('Experiments\Manager');
     }
 
     /**
@@ -59,6 +71,7 @@ class Manager
             'defaults' => true,
             'user_guid' => $this->user ? $this->user->getGuid() : null,
             'languages' => [ 'en' ],
+            'wire_support_tier' => null
         ], $opts); // Merge in our defaults
 
         if ($this->user && $this->user->getLanguage() !== 'en') {
@@ -83,6 +96,8 @@ class Manager
                     })->toArray();
 
                     $this->cacher->set($this->getCacheKey(), json_encode($selected), 7 * 24 * 60 * 60); // 1 week (busted on changes)
+
+                    $this->pseudoHashtags->syncTags($response->toArray());
                 }
             }
         }
@@ -108,8 +123,14 @@ class Manager
         }
 
         // Default hashtags
+        $defaults = [];
 
-        $defaults = $opts['defaults'] ? $this->config->get('tags') : [];
+        if ($opts['defaults']) {
+            $v2Tags = $this->config->get('tags_v2') ?? false;
+            $defaults = $this->isDefaultTagsV2ExperimentActive() && $v2Tags
+                ? $v2Tags
+                : $this->config->get('tags');
+        }
 
         // Merge and output
 
@@ -124,7 +145,7 @@ class Manager
                 'type' => 'user',
             ];
         }
-        
+
         foreach ($trending as $tag) {
             $posts = $tag['posts'];
             $votes = $tag['votes'];
@@ -167,6 +188,8 @@ class Manager
 
         if ($success) {
             $this->cacher->destroy($this->getCacheKey());
+
+            $this->pseudoHashtags->addTags($hashtags);
         }
 
         return $success;
@@ -183,6 +206,9 @@ class Manager
 
         if ($success) {
             $this->cacher->destroy($this->getCacheKey());
+
+            $this->pseudoHashtags->addTags($add);
+            $this->pseudoHashtags->removeTags($remove);
         }
 
         return $success;
@@ -198,6 +224,8 @@ class Manager
 
         if ($success) {
             $this->cacher->destroy($this->getCacheKey());
+
+            $this->pseudoHashtags->removeTags($hashtags);
         }
 
         return $success;
@@ -208,7 +236,7 @@ class Manager
      */
     public function getCacheKey($extra = '')
     {
-        return "user-selected-hashtags:{$this->user->getGuid()}" . ($extra ? ":{$extra}" : '');
+        return "hashtags::user-selected::{$this->user->getGuid()}" . ($extra ? ":{$extra}" : '');
     }
 
     /**
@@ -217,6 +245,31 @@ class Manager
     public function getSharedCacheKey($key, $opts): string
     {
         $languages = implode(':', $opts['languages']);
-        return "hashtags-shared::$key::$languages";
+        return "hashtags::shared::$key::$languages";
+    }
+
+    /**
+     * Whether a user has set hashtags.
+     * @param User $user - user to check for.
+     * @return boolean - true if user has set hashtags.
+     */
+    public function hasSetHashtags(): bool
+    {
+        $userHashtags = $this->get(['limit' => 1]);
+        
+        return $userHashtags &&
+            count($userHashtags) > 0 &&
+            $userHashtags[0]['selected'];
+    }
+    
+    /**
+     * Whether default tags v2 experiment is active.
+     * @return bool true if default tags v2 experiment is active.
+     */
+    private function isDefaultTagsV2ExperimentActive(): bool
+    {
+        return $this->experimentsManager
+            ->setUser($this->user)
+            ->isOn('minds-3216-default-tags-v2');
     }
 }

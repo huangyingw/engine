@@ -21,18 +21,43 @@ class Routes extends ModuleRoutes
     {
         $this->route
             ->withPrefix('api/v3/newsfeed')
-            ->withMiddleware([
-                LoggedInMiddleware::class,
-            ])
             ->do(function (Route $route) {
                 $route->get(
-                    '',
-                    Ref::_('Feeds\Controller', 'getFeed')
+                    'default-feed',
+                    Ref::_('Feeds\Controller', 'getDefaultFeed')
                 );
-                $route->delete(
-                    ':urn',
-                    Ref::_('Feeds\Activity\Controller', 'delete')
+
+                $route->get(
+                    'logged-out', // alias
+                    Ref::_('Feeds\Controller', 'getDefaultFeed'),
                 );
+
+                $route
+                    ->withMiddleware([
+                        LoggedInMiddleware::class
+                    ])
+                    ->do(function (Route $route) {
+                        $route->get(
+                            '',
+                            Ref::_('Feeds\Controller', 'getFeed')
+                        );
+                        $route->get(
+                            'feed/unseen-top',
+                            Ref::_('Feeds\UnseenTopFeed\Controller', 'getUnseenTopFeed')
+                        );
+                        $route->get(
+                            'feed/clustered-recommendations',
+                            Ref::_('Feeds\ClusteredRecommendations\Controller', 'getFeed')
+                        );
+                        $route->get(
+                            'subscribed/latest/count',
+                            Ref::_('Feeds\Subscribed\Controller', 'getLatestCount')
+                        );
+                        $route->delete(
+                            ':urn',
+                            Ref::_('Feeds\Activity\Controller', 'delete')
+                        );
+                    });
             });
     }
 }

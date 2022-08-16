@@ -4,21 +4,21 @@ namespace Minds\Core\Discovery;
 use Zend\Diactoros\ServerRequest;
 use Zend\Diactoros\Response\JsonResponse;
 use Minds\Api\Exportable;
-use Minds\Core\EntitiesBuilder;
-use Minds\Core\Di\Di;
+use Minds\Core\Discovery\Validators\SearchCountRequestValidator;
+use Minds\Exceptions\UserErrorException;
 
 class Controllers
 {
     /** @var Manager */
     protected $manager;
 
-    public function __construct($manager = null, $entitiesBuilder = null)
+    public function __construct($manager = null)
     {
         $this->manager = $manager ?? new Manager();
     }
 
     /**
-     * Controller for search requests
+     * Controller for post trends (based on tag trends)
      * @param ServerRequest $request
      * @return JsonResponse
      */
@@ -82,6 +82,43 @@ class Controllers
         ], 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
+
+    /**
+     * Controller for counting search requests
+     * @param ServerRequest $request
+     * @return JsonResponse
+     */
+    public function getSearchCount(ServerRequest $request): JsonResponse
+    {
+        $queryParams = $request->getQueryParams();
+        $requestValidator = new SearchCountRequestValidator();
+
+        if (!$requestValidator->validate($request->getQueryParams())) {
+            throw new UserErrorException(
+                "There were some errors validating the request properties.",
+                400,
+                $requestValidator->getErrors()
+            );
+        }
+
+        $query = $queryParams['q'] ?? null;
+        $filter = $queryParams['algorithm'] ?? 'latest';
+        $type = $queryParams['type'] ?? '';
+        $plus = filter_var($queryParams['plus'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $nsfw = array_filter(explode(',', $queryParams['nsfw'] ?? '') ?: [], 'strlen');
+
+        $count = $this->manager->getSearchCount($query, $filter, $type, [
+            'plus' => $plus,
+            'nsfw' => $nsfw,
+            'from_timestamp' => (int) $queryParams['from_timestamp'],
+        ]);
+
+        return new JsonResponse([
+            'status' => 'success',
+            'count' => $count,
+        ]);
+    }
+
     /**
      * Controller for getting tags
      * @param ServerRequest $request
@@ -89,12 +126,18 @@ class Controllers
      */
     public function getTags(ServerRequest $request): JsonResponse
     {
-        $tags = $this->manager->getTags();
+        $wireSupportTier = $request->getQueryParams()['wire_support_tier'] ?? null;
+        $trendingTagsV2 = $request->getQueryParams()['trending_tags_v2'] ?? false;
+
+        $tags = $this->manager->getTags([
+            'wire_support_tier' => $wireSupportTier,
+            'trending_tags_v2' => $trendingTagsV2
+        ]);
 
         $entityGuid = $request->getQueryParams()['entity_guid'] ?? null;
 
         $activityRelated = $entityGuid ? $this->manager->getActivityRelatedTags($entityGuid) : null;
-    
+
         try {
             $forYou = $this->manager->getTagTrends([ 'limit' => 12, 'plus' => false]);
         } catch (\Exception $e) {

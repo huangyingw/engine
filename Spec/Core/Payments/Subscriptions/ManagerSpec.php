@@ -3,6 +3,7 @@
 namespace Spec\Minds\Core\Payments\Subscriptions;
 
 use Minds\Core\Di\Di;
+use Minds\Core\EntitiesBuilder;
 use Minds\Core\Payments\Manager;
 use Minds\Core\Payments\Subscriptions\Repository;
 use Minds\Core\Payments\Subscriptions\Subscription;
@@ -23,16 +24,21 @@ class ManagerSpec extends ObjectBehavior
     /** @var Delegates\EmailDelegate */
     protected $emailDelegate;
 
+    /** @var EntitiesBuilder */
+    protected $entitiesBuilder;
+
     public function let(
         Repository $repository,
         Delegates\SnowplowDelegate $snowplowDelegate,
-        Delegates\EmailDelegate $emailDelegate
+        Delegates\EmailDelegate $emailDelegate,
+        EntitiesBuilder $entitiesBuilder
     ) {
         $this->repository = $repository;
         $this->snowplowDelegate = $snowplowDelegate;
         $this->emailDelegate = $emailDelegate;
+        $this->entitiesBuilder = $entitiesBuilder;
 
-        $this->beConstructedWith($repository, $snowplowDelegate, $emailDelegate);
+        $this->beConstructedWith($repository, $snowplowDelegate, $emailDelegate, $entitiesBuilder);
     }
 
     public function it_is_initializable()
@@ -42,8 +48,18 @@ class ManagerSpec extends ObjectBehavior
 
     public function it_should_charge_a_subscription(Subscription $subscription)
     {
+        $sender = new User(123);
+        $subscription->user = $sender;
+
+        $recipient = new User(123);
+        $subscription->getEntity()->willReturn($recipient);
+
         $this->setSubscription($subscription);
 
+        $this->entitiesBuilder->single(Argument::any(), Argument::any())
+            ->shouldBeCalled()
+            ->willReturn($sender);
+        
         $subscription->getPlanId()
             ->shouldBeCalled()
             ->willReturn('spec');
@@ -53,6 +69,9 @@ class ManagerSpec extends ObjectBehavior
 
         $subscription->setTrialDays(0)
             ->willReturn($subscription);
+
+        $subscription->setStatus('active')
+            ->shouldBeCalled();
 
         $this->repository->add($subscription)
             ->shouldBeCalled();
@@ -79,6 +98,96 @@ class ManagerSpec extends ObjectBehavior
             ->shouldBeCalled();
 
         $this->charge()->shouldReturn(true);
+    }
+
+    public function it_should_charge_a_chargeable_sender(
+        Subscription $subscription,
+        User $user
+    ) {
+        $user->get('guid')->willReturn(123);
+
+        $user->isBanned()->shouldBeCalled()->willReturn(false);
+        $user->getDeleted()->shouldBeCalled()->willReturn(0);
+        $user->get('enabled')->willReturn('yes');
+
+        $subscription->user = $user;
+
+        $this->setSubscription($subscription);
+
+        $this->entitiesBuilder->single(Argument::any(), [
+            'cache' => false,
+        ])
+            ->shouldBeCalled()
+            ->willReturn($user);
+
+        $this->canTransact('sender')->shouldReturn(true);
+    }
+
+    public function it_should_not_charge_a_disabled_sender_account(
+        Subscription $subscription,
+        User $user
+    ) {
+        $user->get('guid')->willReturn(123);
+
+        $user->get('enabled')->willReturn('no');
+
+        $subscription->user = $user;
+
+        $this->setSubscription($subscription);
+
+        $this->entitiesBuilder->single(Argument::any(), [
+            'cache' => false,
+        ])
+            ->shouldBeCalled()
+            ->willReturn($user);
+
+        $this->canTransact('sender')->shouldReturn(false);
+    }
+
+    public function it_should_not_charge_a_deleted_sender_account(
+        Subscription $subscription,
+        User $user
+    ) {
+        $user->get('guid')->willReturn(123);
+
+        $user->get('enabled')->willReturn('no');
+        $user->isBanned()->willReturn(false);
+        $user->getDeleted()->willReturn(0);
+
+
+        $subscription->user = $user;
+
+        $this->setSubscription($subscription);
+
+        $this->entitiesBuilder->single(Argument::any(), [
+            'cache' => false,
+        ])
+            ->shouldBeCalled()
+            ->willReturn($user);
+
+        $this->canTransact('sender')->shouldReturn(false);
+    }
+
+    public function it_should_not_charge_a_banned_sender_account(
+        Subscription $subscription,
+        User $user
+    ) {
+        $user->get('guid')->willReturn(123);
+
+        $user->get('enabled')->shouldBeCalled()->willReturn('yes');
+        $user->isBanned()->shouldBeCalled()->willReturn(true);
+
+        $subscription->user = $user;
+
+        $this->setSubscription($subscription);
+
+        $this->entitiesBuilder->single(Argument::any(), [
+            'cache' => false,
+        ])
+            ->shouldBeCalled()
+            ->willReturn($user);
+
+        $this->canTransact('sender')->shouldReturn(false);
     }
 
     public function it_should_create()

@@ -13,6 +13,7 @@ use League\OAuth2\Server\Middleware\ResourceServerMiddleware;
 use League\OAuth2\Server\Grant\PasswordGrant;
 use League\OAuth2\Server\Grant\RefreshTokenGrant;
 use League\OAuth2\Server\Grant\ImplicitGrant;
+use Minds\Common\PseudonymousIdentifier;
 use OpenIDConnectServer\ClaimExtractor;
 use OpenIDConnectServer\Entities\ClaimSetEntity;
 use OpenIDConnectServer\IdTokenResponse;
@@ -82,11 +83,13 @@ class Provider extends Di\Provider
 
         // Resource Server
         $this->di->bind('OAuth\Server\Resource', function ($di) {
+            $config = $di->get('Config');
+
             // Init our repositories
             $accessTokenRepository = $di->get('OAuth\Repositories\AccessToken');
 
             // Path to authorization server's public key
-            $publicKeyPath = '/var/secure/oauth-pub.key';
+            $publicKeyPath = $config->get('oauth')['public_key'] ?: '/var/secure/oauth-pub.key';
 
             // Setup the authorization server
             $server = new ResourceServer(
@@ -105,7 +108,7 @@ class Provider extends Di\Provider
         // Password grant
         $this->di->bind('OAuth\Grants\Password', function ($di) {
             $grant = new PasswordGrant(
-                new Repositories\UserRepository(),           // instance of UserRepositoryInterface
+                new Repositories\UserRepository(null, null, null, new PseudonymousIdentifier()),           // instance of UserRepositoryInterface
                 new Repositories\RefreshTokenRepository()    // instance of RefreshTokenRepositoryInterface
             );
             $grant->setRefreshTokenTTL(new \DateInterval('P1M')); // expire after 1 month
@@ -160,7 +163,7 @@ class Provider extends Di\Provider
         }, ['useFactory' => true]);
 
         $this->di->bind('OAuth\Repositories\User', function ($di) {
-            return new Repositories\UserRepository();
+            return new Repositories\UserRepository(null, null, null, new PseudonymousIdentifier());
         }, ['useFactory' => true]);
 
         $this->di->bind('OAuth\Repositories\Client', function ($di) {

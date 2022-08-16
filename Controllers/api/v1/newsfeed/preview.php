@@ -11,6 +11,7 @@ use Minds\Core;
 use Minds\Entities;
 use Minds\Interfaces;
 use Minds\Api\Factory;
+use Minds\Core\Di\Di;
 
 class preview implements Interfaces\Api
 {
@@ -22,17 +23,14 @@ class preview implements Interfaces\Api
      */
     public function get($pages)
     {
-        $config = Core\Di\Di::_()->get('Config');
-        $iframelyConfig = $config->get('iframely');
-        $url = $_GET['url'];
-        $response = [];
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, "http://open.iframe.ly/api/iframely?origin=".$iframelyConfig['origin']."&api_key=".$iframelyConfig['key']."&url=".urlencode($url));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        $output = curl_exec($ch);
-        curl_close($ch);
-        $meta = json_decode($output, true);
-        $meta['meta']['description'] = html_entity_decode($meta['meta']['description'], ENT_QUOTES); //Decode HTML entities.
+        try {
+            $meta = $this->getMetadata($_GET['url']);
+        } catch (\Exception $e) {
+            return Factory::response([
+                'status' => 'error',
+                'message' => 'An unknown error has occurred'
+            ]);
+        }
         return Factory::response($meta);
     }
 
@@ -49,5 +47,18 @@ class preview implements Interfaces\Api
     public function delete($pages)
     {
         return Factory::response([]);
+    }
+
+    /**
+     * Get Metadata from either metascraper or iframely.
+     * @param string $url - url to get metadata for.
+     * @return array - response ready array.
+     */
+    private function getMetadata(string $url): array
+    {
+        if (Di::_()->get('Experiments\Manager')->isOn('front-5392-metascraper-previews')) {
+            return Di::_()->get('Metascraper\Service')->scrape($url);
+        }
+        return Di::_()->get('Feeds\Activity\RichEmbed\Manager')->getRichEmbed($url);
     }
 }

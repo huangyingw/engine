@@ -2,13 +2,12 @@
 
 namespace Spec\Minds\Core\Security\TwoFactor;
 
-use Minds\Core\Security\TwoFactor\Manager;
-use Minds\Core\Security\TwoFactor\Delegates;
 use Minds\Core\Security\TOTP;
+use Minds\Core\Security\TwoFactor\Delegates;
+use Minds\Core\Security\TwoFactor\Manager;
 use Minds\Core\Security\TwoFactor\TwoFactorRequiredException;
 use Minds\Entities\User;
 use PhpSpec\ObjectBehavior;
-use Prophecy\Argument;
 use Zend\Diactoros\ServerRequest;
 
 class ManagerSpec extends ObjectBehavior
@@ -38,7 +37,7 @@ class ManagerSpec extends ObjectBehavior
         $this->shouldHaveType(Manager::class);
     }
 
-    public function it_should_pass_gatekeeper_if_no_2fa(User $user, ServerRequest $request)
+    public function it_should_pass_gatekeeper_if_no_2fa_and_email_disabled(User $user, ServerRequest $request)
     {
         $this->totpManager->isRegistered($user)
             ->willReturn(false);
@@ -46,11 +45,15 @@ class ManagerSpec extends ObjectBehavior
         $user->getTwoFactor()
             ->willReturn(false);
 
-        $this->gatekeeper($user, $request);
+        $this->gatekeeper($user, $request, enableEmail: false);
     }
 
     public function it_should_block_gatekeeper_if_2fa_and_no_code(User $user, ServerRequest $request)
     {
+        $user->isTrusted()
+            ->shouldBeCalled()
+            ->willReturn(true);
+
         $this->totpManager->isRegistered($user)
             ->willReturn(true);
 
@@ -63,6 +66,10 @@ class ManagerSpec extends ObjectBehavior
 
     public function it_should_pass_gatekeeper_if_2fa_code_correct(User $user, ServerRequest $request)
     {
+        $user->isTrusted()
+            ->shouldBeCalled()
+            ->willReturn(true);
+        
         $this->totpManager->isRegistered($user)
             ->willReturn(true);
 

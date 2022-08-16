@@ -14,13 +14,21 @@ use Minds\Core\Events\Dispatcher;
 use Minds\Core\Events\Event;
 use Minds\Core\EventStreams\ActionEvent;
 use Minds\Core\EventStreams\Topics\ActionEventsTopic;
+use Minds\Core\Experiments\Manager as ExperimentsManager;
 use Minds\Core\Wire\Paywall\PaywallEntityInterface;
-use Minds\Helpers;
 use Minds\Entities;
 use Minds\Entities\Activity;
+use Minds\Helpers;
+use Psr\Http\Message\ServerRequestInterface;
+use Zend\Diactoros\ServerRequestFactory;
 
 class Events
 {
+    public function __construct(
+        private ?ExperimentsManager $experimentsManager = null
+    ) {
+    }
+
     public function register()
     {
         // Notification stream event
@@ -85,10 +93,14 @@ class Events
         // Analytics events
 
         Dispatcher::register('vote', 'all', function (Event $event) {
+            $request = $this->retrieveServerRequest();
+            $experimentsManager = $this->getExperimentsManager()->setUser($request->getAttribute('_user'));
+
             $params = $event->getParameters();
             $direction = $event->getNamespace();
 
             $vote = $params['vote'];
+            $proofOfWork = $params['isFriendlyCaptchaPuzzleValid'] ?? false;
             $entity = $vote->getEntity();
             $actor = $vote->getActor();
 
@@ -96,6 +108,7 @@ class Events
 
             if ($entity->type == 'activity' && $entity->custom_type) {
                 $subtype = '';
+                $guid = '';
                 switch ($entity->custom_type) {
                     case 'video':
                         $subtype = 'video';
@@ -119,6 +132,10 @@ class Events
                     ->setEntitySubtype($subtype)
                     ->setEntityOwnerGuid((string) $entity->owner_guid)
                     ->setAction("vote:{$direction}");
+
+                if ($experimentsManager->isOn("minds-3119-captcha-for-engagement")) {
+                    $event->setProofOfWork($proofOfWork);
+                }
 
                 if ($entity instanceof PaywallEntityInterface) {
                     $wireThreshold = $entity->getWireThreshold();
@@ -234,5 +251,20 @@ class Events
 
             $event->setResponse($export);
         });
+    }
+
+    /**
+     * Do not call this inside of constructor or register functions as it will cause a race condition with config
+     * breaking snowplow events
+     * @return ExperimentsManager
+     */
+    private function getExperimentsManager(): ExperimentsManager
+    {
+        return $this->experimentsManager ??= Di::_()->get("Experiments\Manager");
+    }
+
+    private function retrieveServerRequest(): ServerRequestInterface
+    {
+        return ServerRequestFactory::fromGlobals();
     }
 }

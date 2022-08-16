@@ -9,9 +9,10 @@ use Minds\Core\Di\Di;
 use Minds\Core\Data\cache\PsrWrapper;
 use Lcobucci\JWT;
 use Lcobucci\JWT\Signer\Key;
+use Lcobucci\JWT\Signer\Key\InMemory;
 use Lcobucci\JWT\Signer\Rsa\Sha256;
-use Lcobucci\JWT\Signer\Rsa\Sha512;
 use Minds\Core\Media\Video\Source;
+use Minds\Core\Media\Video\Transcoder\TranscodeStates;
 
 class Manager
 {
@@ -56,6 +57,8 @@ class Manager
 
         $uid = $json['result']['uid'];
         $video->setCloudflareId($uid);
+        // set the status to transcoding after the request was successfully sent
+        $video->setTranscodingStatus(TranscodeStates::TRANSCODING);
     }
 
     /**
@@ -91,6 +94,32 @@ class Manager
     }
 
     /**
+     * Returns the video transcode status
+     * @return TranscodeStatus status
+     */
+    public function getVideoTranscodeStatus(Video $video): object
+    {
+        $videoDetails = $this->getVideo($video);
+        $status = new TranscodeStatus();
+        $status->setPct($videoDetails["status"]["pct"]);
+
+        // TODO: figure out what other statuses exist and handle them
+        switch ($videoDetails["status"]["state"]) {
+            case "inprogress":
+                $status->setState(TranscodeStates::TRANSCODING);
+                break;
+            case "ready":
+                $status->setState(TranscodeStates::COMPLETED);
+                break;
+            default: // failed
+                $status->setState(TranscodeStates::FAILED);
+                break;
+        }
+        return $status;
+    }
+
+
+    /**
      * @param string $videoId
      * @param int $secondsTtl - 3600 (1 hour)
      * @return string
@@ -99,12 +128,14 @@ class Manager
     {
         $signingKey = $this->getSigningKey();
 
-        $jwtBuilder = new JWT\Builder;
+        $jwtConfig = JWT\Configuration::forSymmetricSigner(new Sha256, InMemory::plainText(base64_decode($signingKey->getPem(), true)));
+
+        $jwtBuilder = $jwtConfig->builder();
         $jwtBuilder->withClaim('kid', $signingKey->getId());
         $jwtBuilder->relatedTo($videoId);
         $jwtBuilder->expiresAt(new DateTimeImmutable("+$secondsTtl seconds"));
     
-        $token = (string) $jwtBuilder->getToken(new Sha256, new Key(base64_decode($signingKey->getPem(), true)));
+        $token = (string) $jwtBuilder->getToken($jwtConfig->signer(), $jwtConfig->signingKey())->toString();
 
         return $token;
     }
@@ -118,6 +149,13 @@ class Manager
      */
     protected function getSigningKey(): SigningKey
     {
+        if (isset($this->config->get('cloudflare')['signing_key'])) {
+            // More efficient for a production environment
+            return (new SigningKey())
+                ->setId($this->config->get('cloudflare')['signing_key']['id'])
+                ->setPem($this->config->get('cloudflare')['signing_key']['pem']);
+        }
+
         if ($cached = $this->cache->get('cloudflare_signing_key')) {
             return unserialize($cached);
         }
@@ -133,5 +171,20 @@ class Manager
         $this->cache->set('cloudflare_signing_key', serialize($signingKey));
 
         return $signingKey;
+    }
+
+    /**
+     * Returns the video details
+     * @throws \Exception
+     * @return array videoDetails from cloudflare
+     */
+    private function getVideo(Video $video): array
+    {
+        if (!$video->getCloudflareId()) {
+            throw new \Exception('Cloudflare ID not found', 404);
+        }
+
+        $response = $this->client->request('GET', 'stream/' . $video->getCloudflareId());
+        return json_decode($response->getBody(), true)["result"];
     }
 }

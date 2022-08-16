@@ -37,6 +37,7 @@ class Router
         '/emails/unsubscribe' => 'Minds\\Controllers\\emails\\unsubscribe',
         '/apple-app-site-association' => '\\Minds\\Controllers\\deeplinks',
         '/.well-known/apple-app-site-association' => '\\Minds\\Controllers\\deeplinks',
+        '/.well-known/assetlinks.json' => '\\Minds\\Controllers\\deeplinksAndroid',
         '/checkout' => '\\Minds\\Controllers\\checkout',
     ];
 
@@ -191,7 +192,7 @@ class Router
         $handler = array_shift($path);
         $page = implode('/', $path);
 
-        new page(false); //just to load init etc
+        new page(); //just to load init etc
 
         return false;
     }

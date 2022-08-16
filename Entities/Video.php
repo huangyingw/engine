@@ -13,6 +13,7 @@ use Minds\Core\Media\Services\Factory as ServiceFactory;
 use Minds\Core\Di\Di;
 use cinemr;
 use Minds\Helpers;
+use Minds\Helpers\StringLengthValidators\DescriptionLengthValidator;
 
 /**
  * Class Video
@@ -22,6 +23,19 @@ use Minds\Helpers;
  * @property string $transcoding_status
  * @property string $chosen_format_url
  * @property string $youtube_thumbnail
+ * @property string $cinemr_guid
+ * @property string $super_subtype
+ * @property string $thumbnail
+ * @property string $boost_rejection_reason
+ * @property string $license
+ * @property int $time_sent
+ * @property int $width
+ * @property int $height
+ * @property string $permaweb_id
+ * @property bool $full_hd
+ * @property bool $mature
+ * @property array $nsfw
+ * @property int $rating
  */
 class Video extends MindsObject
 {
@@ -209,7 +223,8 @@ class Video extends MindsObject
             '720.mp4' => $this->getSourceUrl('720.mp4'),
         ];
         $export['play:count'] = Helpers\Counters::get($this->guid, 'plays');
-        $export['description'] = (new Core\Security\XSS())->clean($this->description); //videos need to be able to export html.. sanitize soon!
+        $export['description'] = (new DescriptionLengthValidator())->validateMaxAndTrim($export['description']);
+
         $export['rating'] = $this->getRating();
         $export['time_sent'] = $this->getTimeSent();
 
@@ -533,5 +548,26 @@ class Video extends MindsObject
     public function getPermawebId(): string
     {
         return $this->permaweb_id;
+    }
+
+
+    /**
+     * Sets `license`
+     * @param string $license
+     * @return self
+     */
+    public function setLicense(string $license): self
+    {
+        $this->license = $license;
+        return $this;
+    }
+
+    /**
+     * Gets `license`
+     * @return string
+     */
+    public function getLicense(): string
+    {
+        return $this->license;
     }
 }

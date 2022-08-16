@@ -871,26 +871,7 @@ CREATE MATERIALIZED VIEW minds.subscriptions_by_id AS
     AND read_repair_chance = 0.0
     AND speculative_retry = '99PERCENTILE';
 
-CREATE MATERIALIZED VIEW minds.subscriptions_by_user_guid AS
-    SELECT user_guid, plan_id, payment_method, entity_guid, subscription_id, amount, interval, last_billing, next_billing, status
-    FROM minds.subscriptions
-    WHERE subscription_id IS NOT NULL AND plan_id IS NOT NULL AND payment_method IS NOT NULL AND entity_guid IS NOT NULL AND user_guid IS NOT NULL AND amount IS NOT NULL AND last_billing IS NOT NULL AND next_billing IS NOT NULL AND interval IS NOT NULL AND status IS NOT NULL
-    PRIMARY KEY (user_guid, plan_id, payment_method, entity_guid, subscription_id)
-    WITH CLUSTERING ORDER BY (plan_id ASC, payment_method ASC, entity_guid ASC, subscription_id ASC)
-    AND bloom_filter_fp_chance = 0.01
-    AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
-    AND comment = ''
-    AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
-    AND compression = {'chunk_length_in_kb': '64', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
-    AND crc_check_chance = 1.0
-    AND dclocal_read_repair_chance = 0.1
-    AND default_time_to_live = 0
-    AND gc_grace_seconds = 864000
-    AND max_index_interval = 2048
-    AND memtable_flush_period_in_ms = 0
-    AND min_index_interval = 128
-    AND read_repair_chance = 0.0
-    AND speculative_retry = '99PERCENTILE';
+CREATE INDEX IF NOT EXISTS subscriptions_user_guid_idx ON minds.subscriptions (user_guid);
 
 CREATE TABLE minds.translations (
     guid text,
@@ -1054,6 +1035,19 @@ CREATE TABLE minds.withdrawals (
     AND min_index_interval = 128
     AND read_repair_chance = 0.0
     AND speculative_retry = '99PERCENTILE';
+
+CREATE TABLE minds.rewards_withdrawals (
+    user_guid bigint,
+    timestamp timestamp,
+    tx text,
+    amount varint,
+    completed boolean,
+    completed_tx text,
+    status text,
+    address text,
+    gas bigint,
+    PRIMARY KEY (user_guid, timestamp, tx)
+) WITH CLUSTERING ORDER BY (timestamp DESC, tx ASC);
 
 CREATE TABLE minds.friends (
     key text,
@@ -1498,6 +1492,8 @@ CREATE TABLE minds.moderation_reports (
     PRIMARY KEY (entity_urn, reason_code, sub_reason_code, timestamp)
 ) WITH CLUSTERING ORDER BY (reason_code ASC, sub_reason_code ASC, timestamp DESC);
 
+CREATE INDEX moderation_reports_state_idx ON minds.moderation_reports (state);
+
 CREATE MATERIALIZED VIEW minds.moderation_reports_by_entity_owner_guid AS
     SELECT *
     FROM minds.moderation_reports
@@ -1588,6 +1584,13 @@ ALTER TABLE minds.withdrawals ADD (status text, address text, gas varint);
 CREATE MATERIALIZED VIEW minds.withdrawals_by_status AS
     SELECT *
     FROM minds.withdrawals
+    WHERE status IS NOT NULL AND user_guid IS NOT NULL AND timestamp IS NOT NULL AND tx IS NOT NULL
+    PRIMARY KEY (status, timestamp, user_guid, tx)
+    WITH CLUSTERING ORDER BY (timestamp ASC, user_guid ASC, tx ASC);
+
+CREATE MATERIALIZED VIEW minds.rewards_withdrawals_by_status AS
+    SELECT *
+    FROM minds.rewards_withdrawals
     WHERE status IS NOT NULL AND user_guid IS NOT NULL AND timestamp IS NOT NULL AND tx IS NOT NULL
     PRIMARY KEY (status, timestamp, user_guid, tx)
     WITH CLUSTERING ORDER BY (timestamp ASC, user_guid ASC, tx ASC);
@@ -1683,6 +1686,8 @@ CREATE TABLE minds.push_notifications_device_subscriptions (
     PRIMARY KEY (user_guid, device_token)
 ) WITH CLUSTERING ORDER BY (device_token DESC);
 
+CREATE INDEX push_notifications_device_subscriptions_service_idx ON minds."push_notifications_device_subscriptions" (service);
+
 CREATE TABLE minds.push_notifications_settings (
     user_guid bigint,
     notification_group text,
@@ -1699,6 +1704,85 @@ CREATE TABLE minds.notification_email_digests (
     PRIMARY KEY (year, month, day, frequency, to_guid)
 ) WITH CLUSTERING ORDER BY (month DESC, day DESC);
 
--- CREATE INDEX IF NOT EXISTS user_id_idx ON minds.oauth_access_tokens (user_id);
--- ALTER TABLE minds.jwt_sessions ADD (last_active timestamp, user_agent text, ip text);
--- ALTER TABLE minds.oauth_access_tokens ADD ip text;
+CREATE TABLE minds.twitter_sync (
+    user_guid bigint PRIMARY KEY,
+    last_imported_tweet_id bigint,
+    last_sync_ts timestamp,
+    connected_timestamp timestamp,
+    twitter_followers_count int,
+    twitter_user_id bigint,
+    twitter_username text,
+    discoverable boolean
+);
+
+CREATE TABLE minds.social_compass_answers (
+    user_guid bigint,
+    question_id text,
+    current_value int,
+    PRIMARY KEY (user_guid, question_id)
+);
+
+CREATE TABLE minds.user_quality_scores
+(
+    user_id   text,
+    timestamp timestamp,
+    category  text,
+    score     float,
+    PRIMARY KEY (user_id, timestamp)
+) WITH CLUSTERING ORDER BY (timestamp DESC);
+
+CREATE TABLE minds.system_push_notifications
+(
+    type text,
+    request_uuid timeuuid,
+    author_guid bigint,
+    created_at timestamp,
+    started_at timestamp,
+    completed_at timestamp,
+    title text,
+    message text,
+    url text,
+    target text,
+    counter int,
+    status int,
+    PRIMARY KEY (type, request_uuid)
+) WITH CLUSTERING ORDER BY (request_uuid DESC);
+
+CREATE INDEX spn_status_idx ON minds."system_push_notifications" (status);
+
+CREATE TABLE minds.did_keypairs
+(
+    user_guid bigint PRIMARY KEY,
+    keypair text,
+);
+
+CREATE TABLE minds.cache
+(
+    key text PRIMARY KEY,
+    data text
+);
+
+ALTER TABLE minds.system_push_notifications
+    ADD successful_counter int;
+
+ALTER TABLE minds.system_push_notifications
+    ADD failed_counter int;
+
+ALTER TABLE minds.system_push_notifications
+    ADD skipped_counter int;
+
+CREATE TABLE minds.nostr_hashes_to_entities
+(
+    hash text PRIMARY KEY,
+    entity_urn text
+);
+
+ALTER TABLE minds.moderation_reports
+    ADD admin_reason_override text;
+
+CREATE TABLE minds.metascraper_cache (
+    url_md5_hash text,
+    data text,
+    last_scrape timestamp,
+    PRIMARY KEY (url_md5_hash)
+);

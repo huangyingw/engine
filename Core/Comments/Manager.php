@@ -18,6 +18,7 @@ use Minds\Entities\User;
 use Minds\Exceptions\BlockedUserException;
 use Minds\Exceptions\InvalidLuidException;
 use Minds\Common\Repository\Response;
+use Minds\Core\Events\EventsDispatcher;
 
 class Manager
 {
@@ -74,7 +75,8 @@ class Manager
         $countCache = null,
         $entitiesBuilder = null,
         $spam = null,
-        $kvLimiter = null
+        $kvLimiter = null,
+        protected ?EventsDispatcher $eventsDispatcher = null
     ) {
         $this->repository = $repository ?: new Repository();
         $this->legacyRepository = $legacyRepository ?: new Legacy\Repository();
@@ -86,6 +88,7 @@ class Manager
         $this->entitiesBuilder = $entitiesBuilder ?: Di::_()->get('EntitiesBuilder');
         $this->spam = $spam ?: Di::_()->get('Security\Spam');
         $this->kvLimiter = $kvLimiter ?? Di::_()->get("Security\RateLimits\KeyValueLimiter");
+        $this->eventsDispatcher ??= Di::_()->get('EventsDispatcher');
     }
 
     public function get($entity_guid, $parent_path, $guid)
@@ -120,7 +123,7 @@ class Manager
             }
             $earlier = $this->repository->getList(array_merge($opts, [
                 'limit' => $diff,
-                'descending' => true,
+                'descending' => !$opts['descending'],
                 'include_offset' => false,
             ]));
             
@@ -147,18 +150,18 @@ class Manager
                 $entity = $this->entitiesBuilder->single($comment->getEntityGuid());
                 $commentOwner = $this->entitiesBuilder->single($comment->getOwnerGuid());
                 if (!$this->acl->interact($entity, $commentOwner)) {
-                    error_log("{$opts['entity_guid']} found comment that entity owner can not interact with. Consider deleting.");
+                    error_log("{$comment->getEntityGuid()} found comment that entity owner can not interact with. Consider deleting.");
                     // $this->delete($comment, [ 'force' => true ]);
                     continue;
                 }
 
                 if (!$this->acl->read($comment)) {
-                    error_log("{$opts['entity_guid']} found comment we can't read");
+                    error_log("{$comment->getEntityGuid()} found comment we can't read");
                     continue;
                 }
                 $filtered[] = $comment;
             } catch (\Exception $e) {
-                error_log("{$opts['entity_guid']} exception reading comment {$e->getMessage()}");
+                error_log("{$comment->getEntityGuid()} exception reading comment {$e->getMessage()}");
             }
         }
         return $filtered;
@@ -224,6 +227,10 @@ class Manager
             $this->createEventDispatcher->dispatch($comment);
 
             $this->countCache->destroy($comment);
+
+            $this->eventsDispatcher->trigger('entities-ops', 'create', [
+                'entityUrn' => $comment->getUrn(),
+            ]);
         }
 
         return $success;
@@ -240,7 +247,15 @@ class Manager
             $this->legacyRepository->add($comment, $comment->getDirtyAttributes(), true);
         }
 
-        return $this->repository->update($comment, $comment->getDirtyAttributes());
+        $updated = $this->repository->update($comment, $comment->getDirtyAttributes());
+
+        if ($updated) {
+            $this->eventsDispatcher->trigger('entities-ops', 'update', [
+                'entityUrn' => $comment->getUrn(),
+            ]);
+        }
+
+        return $updated;
     }
 
 
@@ -300,6 +315,10 @@ class Manager
 
         if ($success) {
             $this->countCache->destroy($comment);
+
+            $this->eventsDispatcher->trigger('entities-ops', 'delete', [
+                'entityUrn' => $comment->getUrn(),
+            ]);
         }
 
         return $success;
@@ -349,8 +368,8 @@ class Manager
         }
 
         // Prevent grabbing the same comment multiple times per request (eg. notifications)
-        if (isset($this->tmpCacheByUrn[$urn]) && $this->tmpCacheByUrn[$urn]) {
-            return $this->tmpCacheByUrn[$urn];
+        if (isset($this->tmpCacheByUrn[(string) $urn]) && $this->tmpCacheByUrn[(string) $urn]) {
+            return $this->tmpCacheByUrn[(string) $urn];
         }
 
         $entityGuid = $components[0];
@@ -362,7 +381,7 @@ class Manager
         }
 
         $comment = $this->repository->get($entityGuid, $parentPath, $guid);
-        $this->tmpCacheByUrn[$urn] = $comment;
+        $this->tmpCacheByUrn[(string) $urn] = $comment;
         return $comment;
     }
 

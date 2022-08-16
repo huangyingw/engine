@@ -4,6 +4,11 @@ namespace Minds\Core\EventStreams;
 class ActionEvent implements EventInterface
 {
     use EntityEventTrait;
+    use AcknowledgmentEventTrait;
+    use TimebasedEventTrait;
+
+    /** @var string */
+    const ACTION_CREATE = 'create';
 
     /** @var string */
     const ACTION_VOTE_UP = 'vote_up';
@@ -80,14 +85,19 @@ class ActionEvent implements EventInterface
     /** @var string */
     const ACTION_UNBLOCK = 'unblock';
 
+    /** @var array */
+    const ACTION_NSFW_LOCK = 'nsfw_lock';
+
+    /**
+     * @var string
+     */
+    const ACTION_SYSTEM_PUSH_NOTIFICATION = 'system_push_notification';
+
     /** @var string */
     protected $action;
 
     /** @var string[] */
     protected $actionData = [];
-
-    /** @var int */
-    protected $timestamp = 0;
 
     /**
      * @param string $action
@@ -117,6 +127,8 @@ class ActionEvent implements EventInterface
         $allowedKeys = [];
 
         switch ($this->action) {
+            case self::ACTION_CREATE:
+                break;
             case self::ACTION_VOTE_UP:
             case self::ACTION_VOTE_DOWN:
                 break;
@@ -156,11 +168,16 @@ class ActionEvent implements EventInterface
             case self::ACTION_GROUP_QUEUE_REJECT:
                 $allowedKeys = [ 'group_urn' ];
                 break;
-           case self::ACTION_WIRE_SENT:
+            case self::ACTION_WIRE_SENT:
                 $allowedKeys = [ 'wire_amount' ];
                 break;
             case self::ACTION_BLOCK:
             case self::ACTION_UNBLOCK:
+                break;
+            case self::ACTION_NSFW_LOCK:
+                $allowedKeys = [ 'nsfw_lock' ];
+                break;
+            case self::ACTION_SYSTEM_PUSH_NOTIFICATION:
                 break;
             default:
                 throw new \Exception("Invalid action set. Ensure allowedKeys are set in ActionEvent model");
@@ -182,24 +199,5 @@ class ActionEvent implements EventInterface
     public function getActionData(): array
     {
         return $this->actionData;
-    }
-
-    /**
-     * The event timestamp
-     * @param int $timestamp
-     * @return self
-     */
-    public function setTimestamp(int $timestamp): EventInterface
-    {
-        $this->timestamp = $timestamp;
-        return $this;
-    }
-
-    /**
-     * @return int
-     */
-    public function getTimestamp(): int
-    {
-        return $this->timestamp;
     }
 }

@@ -26,6 +26,10 @@ class BlockchainProvider extends Provider
             return new Token($di->get('Blockchain\Manager'));
         });
 
+        $this->di->bind('Blockchain\Skale\Token', function ($di) {
+            return new Skale\Token();
+        });
+
         $this->di->bind('Blockchain\TokenDistributionEvent', function ($di) {
             return new TokenDistributionEvent();
         });
@@ -46,8 +50,16 @@ class BlockchainProvider extends Provider
             return new Services\Ethereum();
         }, [ 'useFactory' => true ]);
 
+        $this->di->bind('Blockchain\Services\Skale', function () {
+            return new Services\Skale();
+        }, [ 'useFactory' => true ]);
+
         $this->di->bind('Blockchain\Services\BlockFinder', function () {
             return new Services\BlockFinder();
+        }, [ 'useFactory' => true ]);
+
+        $this->di->bind('Blockchain\Services\MindsWeb3', function () {
+            return new Services\Web3Services\MindsWeb3Service();
         }, [ 'useFactory' => true ]);
 
         $this->di->bind('Blockchain\Wallets\Balance', function () {
@@ -60,6 +72,10 @@ class BlockchainProvider extends Provider
 
         $this->di->bind('Blockchain\Wallets\OffChain\TestnetBalance', function () {
             return new Wallets\OffChain\TestnetBalance();
+        });
+
+        $this->di->bind('Blockchain\Wallets\Skale\Balance', function () {
+            return new Wallets\Skale\Balance();
         });
 
         $this->di->bind('Blockchain\Wallets\OffChain\Transactions', function () {
@@ -112,6 +128,22 @@ class BlockchainProvider extends Provider
 
         $this->di->bind('Blockchain\Uniswap\Client', function () {
             return new Uniswap\Client();
+        });
+
+        $this->di->bind('Blockchain\BigQuery\HoldersQuery', function () {
+            return new BigQuery\HoldersQuery();
+        });
+
+        $this->di->bind('Blockchain\Skale\Transaction\Manager', function () {
+            return new Skale\Transaction\Manager();
+        });
+
+        $this->di->bind('Blockchain\Skale\Tools', function () {
+            return new Skale\Tools();
+        });
+
+        $this->di->bind('Blockchain\Skale\Keys', function () {
+            return new Skale\Keys();
         });
     }
 }

@@ -54,10 +54,10 @@ class Events
                     ->setUser($params['entity']);
 
                 if ($keystore->getPrivateKey()) {
-                    $export = [ 'chat' => true ];
+                    $export = $event->response() ?: [];
+                    $export['chat'] = true;
+                    $event->setResponse($export);
                 }
-
-                $event->setResponse($export);
             }
         });
 
@@ -67,12 +67,10 @@ class Events
         Core\Events\Dispatcher::register('entities:map', 'all', function ($event) {
             $params = $event->getParameters();
 
-            if ($params['row']->subtype == 'message') {
-                $event->setResponse(new Entities\Message($params['row']));
-            } elseif ($params['row']->subtype == 'call_missed') {
-                $event->setResponse(new Entities\CallMissed($params['row']));
-            } elseif ($params['row']->subtype == 'call_ended') {
-                $event->setResponse(new Entities\CallEnded($params['row']));
+            if (($params['row'] ?? null) && isset($params['row']->subtype)) {
+                if ($params['row']->subtype == 'message') {
+                    $event->setResponse(new Entities\Message($params['row']));
+                }
             }
         });
 

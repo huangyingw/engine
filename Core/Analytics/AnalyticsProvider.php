@@ -2,8 +2,10 @@
 
 namespace Minds\Core\Analytics;
 
+use Minds\Common\PseudonymousIdentifier;
 use Minds\Core\Analytics\Graphs;
 use Minds\Core\Di\Provider;
+use Minds\Core\Analytics\Handlers\GrowthbookShutdownHandler;
 
 class AnalyticsProvider extends Provider
 {
@@ -26,7 +28,7 @@ class AnalyticsProvider extends Provider
         }, ['useFactor' => true]);
 
         $this->di->bind('Analytics\Snowplow\Manager', function ($di) {
-            return new Snowplow\Manager();
+            return new Snowplow\Manager(null, null, new PseudonymousIdentifier());
         }, ['useFactory' => true]);
     }
 }

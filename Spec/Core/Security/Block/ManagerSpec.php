@@ -20,9 +20,13 @@ class ManagerSpec extends ObjectBehavior
     /** @var PsrWrapper */
     protected $cache;
 
-    public function let(Repository $repository, PsrWrapper $cache, Delegates\EventStreamsDelegate $eventStreamsDelegate)
-    {
-        $this->beConstructedWith($repository, $cache, $eventStreamsDelegate);
+    public function let(
+        Repository $repository,
+        PsrWrapper $cache,
+        Delegates\EventStreamsDelegate $eventStreamsDelegate,
+        Delegates\AnalyticsDelegate $analyticsDelegate
+    ) {
+        $this->beConstructedWith($repository, $cache, $eventStreamsDelegate, $analyticsDelegate);
         $this->repository = $repository;
         $this->cache = $cache;
     }
@@ -153,6 +157,9 @@ class ManagerSpec extends ObjectBehavior
             ->setActorGuid(123)
             ->setSubjectGuid(456);
 
+        $this->repository->countList($blockEntry->getActorGuid())
+            ->shouldBeCalled();
+
         $this->repository->add($blockEntry)
             ->willReturn(true);
 
@@ -161,7 +168,7 @@ class ManagerSpec extends ObjectBehavior
             ->shouldBeCalled();
 
         //
-        
+
         $this->add($blockEntry)->shouldBe(true);
     }
 
@@ -179,7 +186,22 @@ class ManagerSpec extends ObjectBehavior
             ->shouldBeCalled();
 
         //
-        
+
         $this->delete($blockEntry)->shouldBe(true);
+    }
+
+    public function it_should_throw_when_limit_is_exceeded_on_add()
+    {
+        $block = (new BlockEntry())
+            ->setActorGuid('123')
+            ->setSubjectGuid('456');
+
+        $userGuid = $block->getActorGuid();
+
+        $this->repository->countList($userGuid)
+            ->willReturn(1001);
+
+        $this->shouldThrow("Minds\Core\Security\Block\BlockLimitException")
+            ->during('add', [$block]);
     }
 }

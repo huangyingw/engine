@@ -7,7 +7,6 @@ namespace Minds\Core\Security;
 use Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Core\Log\Logger;
-use Minds\Core\Security\RateLimits\Manager as RateLimitsManager;
 use Minds\Core\EntitiesBuilder;
 use Minds\Core\Router\Exceptions\UnverifiedEmailException;
 use Minds\Entities;
@@ -17,14 +16,13 @@ use Minds\Entities\User;
 use Minds\Exceptions\StopEventException;
 use Minds\Helpers\Flags;
 use Minds\Helpers\MagicAttributes;
+use Minds\Core\Security\TwoFactor\Manager as TwoFactorManager;
+use Zend\Diactoros\ServerRequestFactory;
 
 class ACL
 {
     private static $_;
     public static $ignore = false;
-
-    /** @var RateLimitsManager $rateLimits */
-    private $rateLimits;
 
     /** @var EntitiesBuilder */
     private $entitiesBuilder;
@@ -32,12 +30,18 @@ class ACL
     /** @var Logger */
     private $logger;
 
-    public function __construct($rateLimits = null, $entitiesBuilder = null, $logger = null, $config = null)
-    {
-        $this->rateLimits = $rateLimits ?: new RateLimitsManager;
+    /** @var bool */
+    private $normalizeEntities;
+
+    public function __construct(
+        $entitiesBuilder = null,
+        $logger = null,
+        $config = null,
+        private ?TwoFactorManager $twoFactorManager = null
+    ) {
         $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
         $this->logger = $logger ?? Di::_()->get('Logger');
-        $config= $config ?? Di::_()->get('Config');
+        $config = $config ?? Di::_()->get('Config');
         $this->normalizeEntities = $config->get('normalize_entities');
     }
 
@@ -85,7 +89,7 @@ class ACL
         /**
          * Blacklist will not not allow entity to be read
          */
-        if (Core\Events\Dispatcher::trigger('acl:read:blacklist', $entity->getType(), ['entity'=>$entity, 'user'=>$user], false) === true) {
+        if (Core\Events\Dispatcher::trigger('acl:read:blacklist', $entity->getType(), ['entity' => $entity, 'user' => $user], false) === true) {
             return false;
         }
 
@@ -124,16 +128,15 @@ class ACL
         if (!Core\Session::isLoggedIn()) {
             if (
                 (int) $entity->access_id == ACCESS_PUBLIC
-                && (
-                    $entity->owner_guid == $entity->container_guid
-                    || $entity->container_guid == 0
-                )
+                && ($entity->owner_guid == $entity->container_guid
+                    || $entity->container_guid == 0)
             ) {
                 return true;
             } else {
-                if (Core\Events\Dispatcher::trigger('acl:read', $entity->getType(), [
-                    'entity' => $entity,
-                    'user' => $user
+                if (
+                    Core\Events\Dispatcher::trigger('acl:read', $entity->getType(), [
+                        'entity' => $entity,
+                        'user' => $user
                     ], false) === true
                 ) {
                     return true;
@@ -159,10 +162,8 @@ class ACL
          */
         if (
             in_array($entity->getAccessId(), [ACCESS_LOGGED_IN, ACCESS_PUBLIC], false)
-            && (
-                $entity->owner_guid == $entity->container_guid
-                || $entity->container_guid == 0
-            )
+            && ($entity->owner_guid == $entity->container_guid
+                || $entity->container_guid == 0)
         ) {
             return true;
         }
@@ -189,7 +190,7 @@ class ACL
         /**
          * Allow plugins to extend the ACL check
          */
-        if (Core\Events\Dispatcher::trigger('acl:read', $entity->getType(), ['entity'=>$entity, 'user'=>$user], false) === true) {
+        if (Core\Events\Dispatcher::trigger('acl:read', $entity->getType(), ['entity' => $entity, 'user' => $user], false) === true) {
             return true;
         }
 
@@ -229,13 +230,15 @@ class ACL
          * If the user hasn't verified the email
          */
         if (!$this->isEmailVerified($user) && $user->getGUID() !== $entity->getGUID()) {
+            // TODO: add experiment after figuring out how to handle outer catch loops on many actions catching MFA errors.
+            // $this->getTwoFactorManager()->gatekeeper($user, ServerRequestFactory::fromGlobals());
             throw new UnverifiedEmailException();
         }
 
         /**
          * Does the user own the entity, or is it the container?
          */
-        if ($entity->owner_guid
+        if (isset($entity->owner_guid)
             && ($entity->owner_guid == $user->guid)
             && (
                 !$entity->container_guid // there is no container guid
@@ -249,7 +252,8 @@ class ACL
          * Check if its the same entity (is user)
          */
         if ((isset($entity->guid) && $entity->guid == $user->guid) ||
-            MagicAttributes::getterExists($entity, 'getGuid') && $entity->getGuid() == $user->guid) {
+            MagicAttributes::getterExists($entity, 'getGuid') && $entity->getGuid() == $user->guid
+        ) {
             return true;
         }
 
@@ -264,14 +268,15 @@ class ACL
          * Allow plugins to extend the ACL check
          */
         $type = property_exists($entity, 'type') ? $entity->type : 'all';
-        if (Core\Events\Dispatcher::trigger('acl:write', $entity->type, ['entity'=>$entity, 'user'=>$user], false) === true) {
+        if (Core\Events\Dispatcher::trigger('acl:write', $entity->type, ['entity' => $entity, 'user' => $user], false) === true) {
             return true;
         }
 
         /**
          * Allow plugins to check if we own the container
          */
-        if ($entity->container_guid
+        if (
+            $entity->container_guid
             && $entity->container_guid != $entity->owner_guid
             && $entity->container_guid != $entity->guid
         ) {
@@ -325,6 +330,8 @@ class ACL
          * If the user hasn't verified the email
          */
         if (!$this->isEmailVerified($user)) {
+            // TODO: add experiment after figuring out how to handle outer catch loops on many actions catching MFA errors.
+            // $this->getTwoFactorManager()->gatekeeper($user, ServerRequestFactory::fromGlobals());
             throw new UnverifiedEmailException();
         }
 
@@ -346,24 +353,14 @@ class ACL
             return true;
         }
 
-        $rateLimited = $this->rateLimits
-            ->setUser($user)
-            ->setEntity($entity)
-            ->setInteraction($interaction)
-            ->isLimited();
-
-        if ($rateLimited) {
-            return false;
-        }
-
         /**
          * Allow plugins to extend the ACL check
          */
         $event = Core\Events\Dispatcher::trigger('acl:interact', $entity->type, [
-                    'entity'=>$entity,
-                    'user'=>$user,
-                    'interaction' => $interaction,
-                ], null);
+            'entity' => $entity,
+            'user' => $user,
+            'interaction' => $interaction,
+        ], null);
 
         if ($event === false) {
             return false;
@@ -378,14 +375,17 @@ class ACL
      */
     protected function isEmailVerified(User $user): bool
     {
-        $isMobile = isset($_SERVER['HTTP_APP_VERSION']);
-        if ($isMobile) {
-            return true;
-        }
-        if ($user->isTrusted()) {
-            return true;
-        }
-        return false;
+        return $user->isTrusted();
+    }
+
+    /**
+     * Gets TwoFactorManager - this is not provided in the constructor
+     * to avoid a circular dependency loop.
+     * @return TwoFactorManager - manager.
+     */
+    protected function getTwoFactorManager(): TwoFactorManager
+    {
+        return $this->twoFactorManager ?? Di::_()->get('Security\TwoFactor\Manager');
     }
 
     public static function _()

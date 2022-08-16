@@ -44,11 +44,13 @@ class ElasticRepository
             ],
         ];
 
-        $must[] = [
-            'term' => [
-                'type' => $opts['type'],
-            ],
-        ];
+        if (isset($opts['type'])) {
+            $must[] = [
+                'term' => [
+                    'type' => $opts['type'],
+                ],
+            ];
+        }
 
         $must_not[] = [
             'term' => [
@@ -66,15 +68,24 @@ class ElasticRepository
             ];
         }
 
-        if ($opts['entity_guid']) {
-            $must[] = [
-                'term' => [
-                    'entity_guid' => $opts['entity_guid'],
-                ],
-            ];
+        if (isset($opts['entity_guid'])) {
+            $entityGuid = $opts['entity_guid'];
+            if (is_array($entityGuid) && count($entityGuid) > 1) {
+                $must[] = [
+                    'terms' => [
+                        'entity_guid' => $entityGuid,
+                    ],
+                ];
+            } else {
+                $must[] = [
+                    'term' => [
+                        'entity_guid' => $entityGuid,
+                    ],
+                ];
+            }
         }
 
-        if ($opts['owner_guid']) {
+        if (isset($opts['owner_guid'])) {
             $must[] = [
                 'term' => [
                     'owner_guid' => $opts['owner_guid'],
@@ -171,7 +182,7 @@ class ElasticRepository
                 ->setType($doc['_source']['type'])
                 ->setRating($doc['_source']['rating'])
                 ->setImpressions($doc['_source']['impressions'])
-                ->setImpressionsMet($doc['_source']['impressions_met'])
+                ->setImpressionsMet($doc['_source']['impressions_met'] ?? 0)
                 ->setBid($doc['_source']['bid'])
                 ->setBidType($doc['_source']['bid_type']);
             $offset = $boost->getCreatedTimestamp();
@@ -202,7 +213,7 @@ class ElasticRepository
     {
         $body = [
             'doc' => [
-                '@timestamp' => $boost->getCreatedTimestamp(),
+                '@timestamp' => (string)  $boost->getCreatedTimestamp(),
                 'bid' => $boost->getBidType() === 'tokens' ?
                     (string) BigNumber::fromPlain($boost->getBid(), 18)->toDouble() : $boost->getBid(),
                 'bid_type' => $boost->getBidType(),
@@ -226,19 +237,19 @@ class ElasticRepository
         }
 
         if ($boost->getCompletedTimestamp()) {
-            $body['doc']['@completed'] = $boost->getCompletedTimestamp();
+            $body['doc']['@completed'] = (string) $boost->getCompletedTimestamp();
         }
 
         if ($boost->getReviewedTimestamp()) {
-            $body['doc']['@reviewed'] = $boost->getReviewedTimestamp();
+            $body['doc']['@reviewed'] = (string) $boost->getReviewedTimestamp();
         }
 
         if ($boost->getRevokedTimestamp()) {
-            $body['doc']['@revoked'] = $boost->getRevokedTimestamp();
+            $body['doc']['@revoked'] = (string) $boost->getRevokedTimestamp();
         }
 
         if ($boost->getRejectedTimestamp()) {
-            $body['doc']['@rejected'] = $boost->getRejectedTimestamp();
+            $body['doc']['@rejected'] = (string) $boost->getRejectedTimestamp();
         }
 
         $prepared = new Prepared\Update();

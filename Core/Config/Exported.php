@@ -16,6 +16,7 @@ use Minds\Core\Navigation\Manager as NavigationManager;
 use Minds\Core\Rewards\Contributions\ContributionValues;
 use Minds\Core\Session;
 use Minds\Core\ThirdPartyNetworks\Manager as ThirdPartyNetworksManager;
+use Minds\Core\Experiments;
 use Minds\Entities\User;
 use Minds\Core\Wire;
 
@@ -33,6 +34,14 @@ class Exported
     /** @var FeaturesManager */
     protected $features;
 
+    /** @var BlockchainManager */
+    protected $blockchain;
+
+    protected $proDomain;
+
+    /** @var Experiments\Manager */
+    protected $experimentsManager;
+
     /**
      * Exported constructor.
      *
@@ -48,7 +57,8 @@ class Exported
         $i18n = null,
         $blockchain = null,
         $proDomain = null,
-        $features = null
+        $features = null,
+        $experimentsManager = null
     ) {
         $this->config = $config ?: Di::_()->get('Config');
         $this->thirdPartyNetworks = $thirdPartyNetworks ?: Di::_()->get('ThirdPartyNetworks\Manager');
@@ -56,6 +66,7 @@ class Exported
         $this->blockchain = $blockchain ?: Di::_()->get('Blockchain\Manager');
         $this->proDomain = $proDomain ?: Di::_()->get('Pro\Domain');
         $this->features = $features ?: Di::_()->get('Features\Manager');
+        $this->experimentsManager = $experimentsManager ?? Di::_()->get('Experiments\Manager');
     }
 
     /**
@@ -73,16 +84,16 @@ class Exported
             'cdn_assets_url' => $this->config->get('cdn_assets_url'),
             'site_url' => $this->config->get('site_url'),
             'cinemr_url' => $this->config->get('cinemr_url'),
-            'socket_server' => $this->config->get('sockets-server-uri') ?: 'ha-socket-io-us-east-1.minds.com:3030',
+            'socket_server' => $this->config->get('sockets')['server_uri'] ?: 'ha-socket-io-us-east-1.minds.com:3030',
             'navigation' => NavigationManager::export(),
             'language' => $this->i18n->getLanguage(),
             'languages' => $this->i18n->getLanguages(),
             'categories' => $this->config->get('categories') ?: [],
-            'stripe_key' => $this->config->get('payments')['stripe']['public_key'],
-            'recaptchaKey' => $this->config->get('google')['recaptcha']['site_key'],
+            'stripe_key' => $this->config->get('payments')['stripe']['public_key'] ?? '',
             'max_video_length' => $this->config->get('max_video_length'),
             'max_video_length_plus' => $this->config->get('max_video_length_plus'),
             'max_video_file_size' => $this->config->get('max_video_file_size'),
+            'max_name_length' => $this->config->get('max_name_length') ?? 50,
             'features' => (object) ($this->features->export() ?: []),
             'blockchain' => (object) $this->blockchain->getPublicSettings(),
             'sale' => $this->config->get('blockchain')['sale'],
@@ -101,8 +112,19 @@ class Exported
             'boost_rotator_interval' => $this->config->get('boost_rotator_interval'),
             'token_exchange_rate' => $this->config->get('token_exchange_rate'),
             'matrix' => [
-                'chat_url' => $this->config->get('matrix')['chat_url'],
-            ]
+                'chat_url' => $this->config->get('matrix')['chat_url'] ?? null,
+            ],
+            'statuspage_io' => [
+                'url' => $this->config->get('statuspage_io')['url'] ?? null,
+            ],
+            'experiments' => [], // TODO: remove when clients support growthbook features
+            'growthbook' =>  $this->experimentsManager
+                ->setUser(Session::getLoggedinUser())
+                ->getExportableConfig(),
+            'twitter' => [
+                'min_followers_for_sync' => $this->config->get('twitter')['min_followers_for_sync'] ?? 25000,
+            ],
+            'vapid_key' => $this->config->get("webpush_vapid_details")['public_key']
         ];
 
         if (Session::isLoggedIn()) {
@@ -122,7 +144,7 @@ class Exported
         }
 
         if ($context === 'embed') {
-            $exported['MindsEmbed'] = $embedded_entity ?? null;
+            $exported['MindsEmbed'] = null;
         }
 
         if ($_GET['__e_cnf_token'] ?? false) {

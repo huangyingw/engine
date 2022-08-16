@@ -7,6 +7,8 @@
 namespace Minds\Core\Analytics\Views;
 
 use Exception;
+use Minds\Common\Urn;
+use Minds\Core\Feeds\Seen\Manager as FeedsSeenManager;
 
 class Manager
 {
@@ -16,12 +18,17 @@ class Manager
     /** @var ElasticRepository */
     protected $elasticRepository;
 
+    /** @var FeedsSeenManager */
+    protected $feedsSeenManager;
+
     public function __construct(
         $repository = null,
-        $elasticRepository = null
+        $elasticRepository = null,
+        $feedsSeenManager = null,
     ) {
         $this->repository = $repository ?: new Repository();
         $this->elasticRepository = $elasticRepository ?: new ElasticRepository();
+        $this->feedsSeenManager = $feedsSeenManager ?: new FeedsSeenManager();
     }
 
     /**
@@ -39,6 +46,10 @@ class Manager
             ->setUuid(null)
             ->setTimestamp(time());
 
+        // Mark the entity as 'seen'
+        $entityGuid = (new Urn($view->getEntityUrn()))->getNss();
+        $this->feedsSeenManager->seeEntities([$entityGuid]);
+
         // Add to repository
         $this->repository->add($view);
 
@@ -47,15 +58,14 @@ class Manager
 
     /**
      * Synchronise views from cassandra to elastic
-     * @param int $from
-     * @param int $to
+     * @param array $opts
      * @return void
      */
     public function syncToElastic($opts = [])
     {
         $opts = array_merge([
             'from' => null,
-            'to' => $to,
+            'to' => null,
             'day' => 5,
             'month' => 6,
             'year' => 2019,

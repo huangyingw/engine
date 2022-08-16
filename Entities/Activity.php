@@ -13,6 +13,37 @@ use Minds\Core\Feeds\Activity\RemindIntent;
 
 /**
  * Activity Entity
+ * @property array $ownerObj
+ * @property User $owner
+ * @property int $boost_rejection_reason
+ * @property array $wire_threshold
+ * @property array $remind_object
+ * @property int $comments_enabled
+ * @property int $paywall
+ * @property int $edited
+ * @property int $deleted
+ * @property int $spam
+ * @property int $pending
+ * @property int $ephemeral
+ * @property string $entity_guid
+ * @property int $mature
+ * @property string $to_guid
+ * @property int $boosted
+ * @property int $boosted_onchain
+ * @property int $p2p_boosted
+ * @property string $title
+ * @property string $message
+ * @property string $perma_url
+ * @property string $blurb
+ * @property array $custom_data
+ * @property string $custom_type
+ * @property string $thumbnail_src
+ * @property string $boosted_guid
+ * @property string $urn
+ * @property int $time_sent
+ * @property string $license
+ * @property string $permaweb_id
+ * @property string $blurhash
  */
 class Activity extends Entity implements MutatableEntityInterface, PaywallEntityInterface
 {
@@ -61,6 +92,7 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
             'time_sent' => null,
             'license' => '',
             'permaweb_id' => '',
+            'blurhash' => null,
             //	'node' => elgg_get_site_url()
         ]);
     }
@@ -70,6 +102,8 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
         parent::__construct($guid);
         $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
         $this->activityManager = $activityManager ?? Di::_()->get('Feeds\Activity\Manager');
+        if ($cache) {
+        }
     }
 
     /**
@@ -148,6 +182,10 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
         }
 
         (new Core\Translation\Storage())->purge($this->guid);
+
+        Core\Events\Dispatcher::trigger('entities-ops', 'delete', [
+            'entityUrn' => $this->getUrn()
+        ]);
 
         Queue\Client::build()->setQueue("FeedCleanup")
             ->send([
@@ -244,7 +282,8 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
                 'hide_impressions',
                 'pinned',
                 'time_sent',
-                'permaweb_id'
+                'permaweb_id',
+                'blurhash'
             ]
         );
     }
@@ -308,6 +347,7 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
             $export['ownerObj'] = $this->getOwnerObj();
             $export['time_sent'] = $this->getTimeSent();
             $export['license'] = $this->license;
+            $export['blurhash'] = $this->blurhash;
 
             if ($this->hide_impressions) {
                 $export['hide_impressions'] = $this->hide_impressions;
@@ -982,6 +1022,7 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
     public function isRemind(): bool
     {
         return !$this->message
+            && is_array($this->remind_object)
             && $this->remind_object['guid']
             && !($this->remind_object['quoted_post'] ?? true);
     }
@@ -993,7 +1034,9 @@ class Activity extends Entity implements MutatableEntityInterface, PaywallEntity
      */
     public function isQuotedPost(): bool
     {
-        return $this->remind_object['guid'] && !$this->isRemind();
+        return is_array($this->remind_object)
+            && $this->remind_object['guid']
+            && !$this->isRemind();
     }
 
     /**

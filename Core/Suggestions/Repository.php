@@ -5,16 +5,22 @@ namespace Minds\Core\Suggestions;
 
 use Minds\Core\Di\Di;
 use Minds\Common\Repository\Response;
+use Minds\Core\Config\Config;
 use Minds\Core\Data\ElasticSearch\Prepared\Search as Prepared;
+use Minds\Core\Data\ElasticSearch\Client;
 
 class Repository
 {
-    /** @var $es */
+    /** @var Client */
     private $es;
 
-    public function __construct($es = null)
+    /** @var Config */
+    protected $config;
+
+    public function __construct($es = null, Config $config = null)
     {
         $this->es = $es ?: Di::_()->get('Database\ElasticSearch');
+        $this->config = $config ?? Di::_()->get('Config');
     }
 
     /**
@@ -48,11 +54,10 @@ class Repository
             $must[]['terms'] = [
                 'user_guid.keyword' => $opts['user_guids'],
             ];
-        } else { // Terms lookup against minds-graph:subscrpitions
+        } elseif ($opts['user_guid']) { // Terms lookup against minds-graph:subscrpitions
             $must[]['terms'] = [
                 'user_guid.keyword' => [
-                    'index' => 'minds-graph',
-                    'type' => 'subscriptions',
+                    'index' => 'minds-graph-subscriptions',
                     'id' => $opts['user_guid'],
                     'path' => 'guids',
                 ],
@@ -68,8 +73,7 @@ class Repository
             // Remove groups we are in
             $must_not[]['terms'] = [
                 'entity_guid.keyword' => [
-                    'index' => 'minds_badger',
-                    'type' => 'user',
+                    'index' => $this->config->get('elasticsearch')['indexes']['search_prefix'] . '-user',
                     'id' => $opts['user_guid'],
                     'path' => 'group_membership',
                 ],
@@ -82,44 +86,46 @@ class Repository
                 'action.keyword' => 'subscribe',
             ];
 
-            // Remove everyone we are subscribe to already
+            if ($opts['user_guid']) {
+                // Remove everyone we are subscribe to already
+                $must_not[]['terms'] = [
+                    'entity_guid.keyword' => [
+                        'index' => 'minds-graph-subscriptions',
+                        'id' => $opts['user_guid'],
+                        'path' => 'guids',
+                    ],
+                ];
+
+                // Remove ourselves
+                $must_not[]['term'] = [
+                    'entity_guid.keyword' => $opts['user_guid'],
+                ];
+
+                // Range
+                $must[]['range'] = [
+                    '@timestamp' => [
+                        'gte' => strtotime('midnight -30 days', time()) * 1000,
+                        'lt' => strtotime('midnight', time()) * 1000,
+                    ],
+                ];
+            }
+        }
+
+        if ($opts['user_guid']) {
+            // Remove everyone we have passed
             $must_not[]['terms'] = [
                 'entity_guid.keyword' => [
-                    'index' => 'minds-graph',
-                    'type' => 'subscriptions',
+                    'index' => 'minds-graph-pass',
                     'id' => $opts['user_guid'],
                     'path' => 'guids',
                 ],
             ];
 
-            // Remove ourselves
+            // Remove Minds channel
             $must_not[]['term'] = [
-                'entity_guid.keyword' => $opts['user_guid'],
-            ];
-
-            // Range
-            $must[]['range'] = [
-                '@timestamp' => [
-                    'gte' => strtotime('midnight -30 days', time()) * 1000,
-                    'lt' => strtotime('midnight', time()) * 1000,
-                ],
+                'user_guid.keyword' => '100000000000000519',
             ];
         }
-
-        // Remove everyone we have passed
-        $must_not[]['terms'] = [
-            'entity_guid.keyword' => [
-                'index' => 'minds-graph',
-                'type' => 'pass',
-                'id' => $opts['user_guid'],
-                'path' => 'guids',
-            ],
-        ];
-
-        // Remove Minds channel
-        $must_not[]['term'] = [
-            'user_guid.keyword' => '100000000000000519',
-        ];
 
         $query = [
             'index' => 'minds-metrics-*',
@@ -168,7 +174,6 @@ class Repository
 
     /**
      * Return a single suggestion
-     * @return Suggestion
      */
     public function get($guid)
     {

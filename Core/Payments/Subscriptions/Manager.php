@@ -15,6 +15,7 @@ use Minds\Core\Payments;
 use Minds\Core\Events\Dispatcher;
 use Minds\Entities\Factory;
 use Minds\Entities\User;
+use Minds\Exceptions\ServerErrorException;
 
 class Manager
 {
@@ -31,17 +32,24 @@ class Manager
     /** @var Delegates\SnowplowDelegate */
     protected $snowplowDelegate;
 
+    /** @var Delegates\EmailDelegate */
+    protected $emailDelegate;
+
     /** @var Subscription $subscription */
     protected $subscription;
 
     /** @var User */
     protected $user;
 
-    public function __construct($repository = null, $snowplowDelegate = null, $emailDelegate = null)
+    /** @var EntitiesBuilder */
+    protected $entitiesBuilder;
+
+    public function __construct($repository = null, $snowplowDelegate = null, $emailDelegate = null, $entitiesBuilder = null)
     {
         $this->repository = $repository ?: Di::_()->get('Payments\Subscriptions\Repository');
         $this->snowplowDelegate = $snowplowDelegate ?? new Delegates\SnowplowDelegate;
         $this->emailDelegate = $emailDelegate ?? new Delegates\EmailDelegate();
+        $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
     }
 
     /**
@@ -55,12 +63,61 @@ class Manager
     }
 
     /**
+     * Validates whether an actor can be transact based off their account state -
+     * e.g. are they banned, enabled or deleted.
+     * @param string $actorType - 'recipient' or 'sender'.
+     * @return boolean - true if actor can transact.
+     */
+    public function canTransact(string $actorType = 'sender'): bool
+    {
+        switch ($actorType) {
+            case 'sender':
+                $guid = $this->subscription->user->guid;
+                break;
+            case 'recipient':
+                $guid = $this->subscription->getEntity()->guid;
+                break;
+            default:
+                throw new ServerErrorException('Invalid transaction actor type');
+        }
+
+        // reconstruct from cache to ensure values are up to date.
+        $user = $this->entitiesBuilder->single($guid, [
+            'cache' => false,
+        ]);
+
+        return !(
+            !$user ||
+            $user->enabled === "no" ||
+            $user->isBanned() ||
+            $user->getDeleted()
+        );
+    }
+
+    /**
+     * @param string $id
+     * @return Subscription
+     */
+    public function get($id)
+    {
+        return $this->repository->get($id);
+    }
+
+    /**
      * Charge
      * @return bool
      */
     public function charge()
     {
         try {
+            if (!$this->canTransact('sender')) {
+                throw new ServerErrorException('Cannot charge this user - they are banned, disabled or deleted');
+            }
+
+            if (!$this->canTransact('recipient')) {
+                throw new ServerErrorException("Cannot pay this user - they are banned, disabled or deleted");
+            }
+
             $result = Dispatcher::trigger('subscriptions:process', $this->subscription->getPlanId(), [
                 'subscription' => $this->subscription
             ]);
@@ -69,6 +126,8 @@ class Manager
             $this->subscription->setNextBilling($this->getNextBilling());
             // Cancel trial after subsequent charge
             $this->subscription->setTrialDays(0);
+            // Successful should always reset
+            $this->subscription->setStatus('active');
         } catch (\Exception $e) {
             error_log("Payment failed: " . $e->getMessage());
             $this->subscription->setStatus('failed');
@@ -80,7 +139,7 @@ class Manager
 
         $this->snowplowDelegate->onCharge($this->subscription);
 
-        return $result;
+        return $result ?? false;
     }
 
     /**

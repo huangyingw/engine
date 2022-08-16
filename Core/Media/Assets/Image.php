@@ -4,6 +4,7 @@ namespace Minds\Core\Media\Assets;
 use Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Entities;
+use PHPStan\File\CouldNotWriteFileException;
 
 class Image implements AssetsInterface
 {
@@ -64,12 +65,12 @@ class Image implements AssetsInterface
                 throw new \Exception('Sorry, the album was not found');
             }
 
-            $mediaAlbums->addChildren($album, [ $this->entity->guid => time() ]);
+            $album->addChildren($album, [ $this->entity->guid => time() ]);
             $assets['container_guid'] = $album->guid;
         } elseif (!$container_guid) {
             $mediaAlbums = Di::_()->get('Media\Albums');
 
-            $albums = $mediaAlbums->getAll($owner_guid, [
+            $albums = $mediaAlbums->getAll($data['owner_guid'], [
                 'createDefault' => true
             ]);
 

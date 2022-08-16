@@ -10,7 +10,7 @@ use Minds\Entities\User;
 
 /**
  */
-class PushNotification
+class PushNotification implements PushNotificationInterface
 {
     /** @var Notification */
     protected $notification;
@@ -120,6 +120,10 @@ class PushNotification
             $fromString .= " and {$this->notification->getMergedCount()} others";
         }
 
+        if (!$pronoun) {
+            return "$fromString $verb $noun";
+        }
+
         return "$fromString $verb $pronoun $noun";
     }
 
@@ -160,12 +164,16 @@ class PushNotification
      */
     public function getUri(): string
     {
+        if ($this->notification->getType() === NotificationTypes::TYPE_SUBSCRIBE) {
+            return $this->config->get('site_url') . 'notifications';
+        }
+
         $entity = $this->notification->getEntity();
         switch ($entity->getType()) {
             case 'user':
                 return $this->config->get('site_url') . $entity->getUsername();
             case 'comment':
-                return $this->config->get('site_url') . 'newsfeed/' . $entity->getEntityGuid();
+                return $this->config->get('site_url') . 'newsfeed/' . $entity->getEntityGuid() . '?focusedCommentUrn=' . $entity->getUrn();
             case 'activity':
             case 'object':
                 return $this->config->get('site_url') . 'newsfeed/' . $entity->getGuid();
@@ -211,7 +219,7 @@ class PushNotification
      */
     public function getGroup(): string
     {
-        return $this->notification->getType();
+        return $this->notification->getGroupingType();
     }
 
     /**
@@ -264,6 +272,14 @@ class PushNotification
     public function getNotification(): Notification
     {
         return $this->notification;
+    }
+
+    /**
+     * @return string
+     */
+    public function getUserGuid(): string
+    {
+        return (string) $this->notification->getToGuid();
     }
 
     /**

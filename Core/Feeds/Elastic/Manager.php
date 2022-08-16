@@ -2,15 +2,14 @@
 
 namespace Minds\Core\Feeds\Elastic;
 
+use Composer\Semver\Comparator;
 use Minds\Common\Repository\Response;
 use Minds\Common\Urn;
-use Minds\Core\Feeds\FeedSyncEntity;
 use Minds\Core\Di\Di;
-use Minds\Core\Events\Dispatcher;
-use Minds\Core\Search;
-use Minds\Entities\Entity;
 use Minds\Core\EntitiesBuilder;
-use Minds\Core\Trending\Aggregates;
+use Minds\Core\Feeds\FeedSyncEntity;
+use Minds\Core\Feeds\Seen\Manager as SeenManager;
+use Minds\Core\Search;
 use Minds\Core\Security\ACL;
 use Minds\Helpers\Flags;
 
@@ -31,6 +30,9 @@ class Manager
     /** @var ACL */
     protected $acl;
 
+    /** @var SeenManager */
+    protected $seenManager;
+
     /** @var Entities */
     protected $entities;
 
@@ -47,6 +49,7 @@ class Manager
         $entitiesBuilder = null,
         $entities = null,
         $search = null,
+        $seenManager = null,
         $eventsDispatcher = null,
         $acl = null
     ) {
@@ -56,6 +59,7 @@ class Manager
         $this->search = $search ?: Di::_()->get('Search\Search');
         $this->eventsDispatcher = $eventsDispatcher ?? Di::_()->get('EventsDispatcher');
         $this->acl = $acl ?? Di::_()->get('Security\ACL');
+        $this->seenManager = $seenManager ?? Di::_()->get('Feeds\Seen\Manager');
 
         $this->from = strtotime('-7 days') * 1000;
         $this->to = time() * 1000;
@@ -117,6 +121,9 @@ class Manager
             'plus' => false,
             'hide_reminds' => $hide_reminds,
             'wire_support_tier_only' => false,
+            'include_group_posts' => false,
+            'unseen' => false,
+            'demoted' => false,
         ], $opts);
 
         if (isset($opts['query']) && $opts['query']) {
@@ -128,6 +135,13 @@ class Manager
 
             $response = new Response($result);
             return $response;
+        }
+
+        if (isset($opts['unseen']) && $opts['unseen']) {
+            $seenEntities = $this->seenManager->listSeenEntities();
+            if (count($seenEntities) > 0) {
+                $opts['exclude'] = array_merge($opts['exclude'] ?? [], $seenEntities);
+            }
         }
 
         $feedSyncEntities = [];
@@ -155,8 +169,8 @@ class Manager
             ++$i; // Update here as we don't want to count skipped
 
             $entityType = $scoredGuid->getType() ?? 'entity';
-            if (strpos($entityType, 'object:', 0) === 0) {
-                $entityType = str_replace('object:', '', $entityType);
+            if (strpos($entityType, 'object-', 0) === 0) {
+                $entityType = str_replace('object-', '', $entityType);
             }
 
             if ($opts['as_activities'] && !in_array($opts['type'], ['user', 'group'], true)) {
@@ -165,13 +179,14 @@ class Manager
 
             $urn = implode(':', [
                 'urn',
-                $entityType,
+                $entityType ?: 'entity',
                 $scoredGuid->getGuid(),
             ]);
 
             $feedSyncEntities[] = (new FeedSyncEntity())
                 ->setGuid((string) $scoredGuid->getGuid())
-                ->setOwnerGuid((string) $ownerGuid)
+    
+                 ->setOwnerGuid((string) $ownerGuid)
                 ->setUrn(new Urn($urn))
                 ->setTimestamp($scoredGuid->getTimestamp());
 
@@ -180,6 +195,18 @@ class Manager
 
         $entities = [];
         $next = '';
+
+        /**
+         * Awkward hack to pin mobile post
+         */
+        if (isset($_SERVER['HTTP_APP_VERSION']) && Comparator::lessThan($_SERVER['HTTP_APP_VERSION'], '4.17.0')) {
+            $mobilePin = (new FeedSyncEntity())
+                ->setGuid("1279518512628371457")
+                ->setOwnerGuid("100000000000000519")
+                ->setUrn(new Urn("urn:activity:1279518512628371457"))
+                ->setTimestamp(1630436985);
+            array_unshift($feedSyncEntities, $mobilePin);
+        }
 
         if (count($feedSyncEntities) > 0) {
             $next = (string) (array_reduce($feedSyncEntities, function ($carry, FeedSyncEntity $feedSyncEntity) {

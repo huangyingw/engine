@@ -8,12 +8,14 @@ use Minds\Core\EntitiesBuilder;
 use Minds\Core\Config;
 use Minds\Core\Data\ElasticSearch;
 use Minds\Core\Hashtags\User\Manager as HashtagManager;
+use Minds\Core\Hashtags\Trending\Manager as TrendingHashtagManager;
 use Minds\Core\Hashtags\HashtagEntity;
 use Minds\Common\Repository\Response;
 use Minds\Core\Feeds\Elastic\Manager as ElasticFeedsManager;
 use Minds\Core\Search\SortingAlgorithms;
 use Minds\Core\Security\ACL;
 use Minds\Entities;
+use Minds\Entities\User;
 
 class Manager
 {
@@ -47,6 +49,12 @@ class Manager
     /** @var ACL */
     protected $acl;
 
+    /** @var Features */
+    protected $features;
+
+    /** @var TrendingHashtagManager */
+    protected $trendingHashtagManager;
+
     public function __construct(
         $es = null,
         $entitiesBuilder = null,
@@ -54,7 +62,9 @@ class Manager
         $hashtagManager = null,
         $elasticFeedsManager = null,
         $user = null,
-        $acl = null
+        $acl = null,
+        $features = null,
+        TrendingHashtagManager $trendingHashtagManager = null
     ) {
         $this->es = $es ?? Di::_()->get('Database\ElasticSearch');
         $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
@@ -62,8 +72,10 @@ class Manager
         $this->hashtagManager = $hashtagManager ?? Di::_()->get('Hashtags\User\Manager');
         $this->elasticFeedsManager = $elasticFeedsManager ?? Di::_()->get('Feeds\Elastic\Manager');
         $this->user = $user ?? Session::getLoggedInUser();
-        $this->plusSupportTierUrn = $this->config->get('plus')['support_tier_urn'];
+        $this->plusSupportTierUrn = $this->config->get('plus')['support_tier_urn'] ?? null;
         $this->acl = $acl ?? Di::_()->get('Security\ACL');
+        $this->features = $features ?: Di::_()->get('Features\Manager');
+        $this->trendingHashtagManager = $trendingHashtagManager ?? Di::_()->get('Hashtags\Trending\Manager');
     }
 
     /**
@@ -95,7 +107,11 @@ class Manager
         if ($opts['tag_cloud_override']) {
             $this->tagCloud = $opts['tag_cloud_override'];
         } elseif (empty($this->tagCloud) && $opts['plus'] === false) {
-            throw new NoTagsException();
+            if (!$this->features->has('discovery-default-tags')) {
+                throw new NoTagsException();
+            }
+            // fallback to defaults.
+            $this->tagCloud = $this->config->get('tags') ?? [];
         }
 
         $tagTrends12 = $this->getTagTrendsForPeriod(12, [], [
@@ -198,8 +214,7 @@ class Manager
         ];
 
         $query = [
-            'index' => $this->config->get('elasticsearch')['index'],
-            'type' => 'activity',
+            'index' => $this->config->get('elasticsearch')['indexes']['search_prefix'] . '-activity',
             'body' =>  [
                 'query' => [
                     'bool' => [
@@ -210,7 +225,7 @@ class Manager
                 'aggs' => [
                     'tags' => [
                         'terms' => [
-                            'field' => 'tags.keyword',
+                            'field' => 'tags',
                             'min_doc_count' => 10,
                             'exclude' => $opts['plus'] ? [] : $excludeTags,
                             'size' => $opts['limit'],
@@ -221,7 +236,7 @@ class Manager
                         'aggs' => [
                             'tags_per_owner' => [
                                 'cardinality' => [
-                                    'field' => 'owner_guid.keyword',
+                                    'field' => 'owner_guid',
                                 ]
                             ]
                         ],
@@ -272,7 +287,7 @@ class Manager
         //     $opts['hoursAgo'] = 1680; // 10 Weeks
         // }
 
-        $type = 'activity';
+        $types = [ 'activity' ];
 
         $languages = [ 'en' ];
         if ($this->user && $this->user->getLanguage() !== 'en') {
@@ -289,49 +304,57 @@ class Manager
 
         $must = [];
         $must_not = [];
+        $functions = [];
 
-        // Date Range
+        /**
+         * Discovery development mode will significantly alter the discovery algorithm
+         * so that it does not factor in time, weights on comments and votes etc, allowing for
+         * development around the UI.
+         */
+        if (!$this->config->get('discovery_development_mode')) {
+            // Date Range
 
-        $must[] = [
-            'range' => [
-                '@timestamp' => [
-                    'gte' => strtotime("{$opts['hoursAgo']} hours ago") * 1000,
-                ]
-            ],
-        ];
-
-        // Have interaction
-
-        if ($opts['plus'] === false) {
             $must[] = [
                 'range' => [
-                    'comments:count' => [
-                        'gte' => 1,
+                    '@timestamp' => [
+                        'gte' => strtotime("{$opts['hoursAgo']} hours ago") * 1000,
                     ]
-                ]
-            ];
-        } else {
-            $must[] = [
-                'range' => [
-                    'votes:up' => [
-                        'gte' => 2,
-                    ]
-                ]
-            ];
-        }
-
-        // Match query
-
-        if ($opts['plus'] === false) {
-            $must[] = [
-                'multi_match' => [
-                    //'type' => 'cross_fields',
-                    'query' => implode(' ', $tags),
-                    'operator' => 'OR',
-                    'fields' => ['title', 'message', 'tags^2'],
-                    'boost' => 0,
                 ],
             ];
+
+            // Have interaction
+
+            if ($opts['plus'] === false) {
+                $must[] = [
+                    'range' => [
+                        'comments:count' => [
+                            'gte' => 1,
+                        ]
+                    ]
+                ];
+            } else {
+                $must[] = [
+                    'range' => [
+                        'votes:up' => [
+                            'gte' => 2,
+                        ]
+                    ]
+                ];
+            }
+    
+            // Match query
+
+            if ($opts['plus'] === false) {
+                $must[] = [
+                    'multi_match' => [
+                        //'type' => 'cross_fields',
+                        'query' => implode(' ', $tags),
+                        'operator' => 'OR',
+                        'fields' => ['title', 'message', 'tags^2'],
+                        'boost' => 0,
+                    ],
+                ];
+            }
         }
 
         // Only plus?
@@ -344,7 +367,10 @@ class Manager
             ];
             // Only blogs and videos show in top half of discovery
             // as we don't want blury thumbnails
-            $type = 'object:video,object:blog';
+            $types = [
+                'object-video',
+                'object-blog',
+            ];
         }
 
         // Not NSFW
@@ -355,73 +381,76 @@ class Manager
             ]
         ];
 
-        // Scoring functions
+        if (!$this->config->get('discovery_development_mode')) {
+            // Scoring functions
 
-        $functions = [];
-
-        $functions[] = [
-            'filter' => [
-                'multi_match' => [
-                    'query' => implode(' ', $this->tagCloud),
-                    'operator' => 'OR',
-                    'fields' => ['title', 'message', 'tags'],
-                    'boost' => 0,
+            $functions[] = [
+                'filter' => [
+                    'multi_match' => [
+                        'query' => implode(' ', $this->tagCloud),
+                        'operator' => 'OR',
+                        'fields' => ['title', 'message', 'tags'],
+                        'boost' => 0,
+                    ],
                 ],
-            ],
-            'weight' => 2,
-        ];
+                'weight' => 2,
+            ];
 
-        $functions[] = [
-            'filter' => [
-                'terms' => [
-                    'subtype' => [ 'video', 'blog' ],
-                ]
-            ],
-            'weight' => 10, // videos and blogs are worth 10x
-        ];
-
-        if ($this->user && $opts['plus'] !== true) {
             $functions[] = [
                 'filter' => [
                     'terms' => [
-                        'language' => [ $this->user->getLanguage() ],
+                        'subtype' => [ 'video', 'blog' ],
                     ]
                 ],
-                'weight' => 50, // Multiply your own language by 50x
+                'weight' => 10, // videos and blogs are worth 10x
             ];
-        } elseif ($opts['plus'] === true) {
-            $must[] = [
-                'terms' => [
-                    'language' => $languages,
+
+            if ($this->user && $opts['plus'] !== true) {
+                $functions[] = [
+                    'filter' => [
+                        'terms' => [
+                            'language' => [ $this->user->getLanguage() ],
+                        ]
+                    ],
+                    'weight' => 50, // Multiply your own language by 50x
+                ];
+            } elseif ($opts['plus'] === true) {
+                $must[] = [
+                    'terms' => [
+                        'language' => $languages,
+                    ],
+                ];
+            }
+
+            $functions[] = [
+                'field_value_factor' => [
+                    'field' => 'comments:count',
+                    'factor' => 10,
+                    'modifier' => 'sqrt',
+                    'missing' => 0,
                 ],
+            ];
+
+            $functions[] = [
+                'gauss' => [
+                    '@timestamp' => [
+                        'offset' => '6h', // Do not decay until we reach this bound
+                        //'offset' => $opts['hoursAgo'] . 'h',
+                        'scale' => '24h', // Peak decay will be here
+                        //'scale' => '12h',
+                        //'decay' => rand(1, 9) / 10
+                    ],
+                ],
+                'weight' => 10,
             ];
         }
 
-        $functions[] = [
-            'field_value_factor' => [
-                'field' => 'comments:count',
-                'factor' => 10,
-                'modifier' => 'sqrt',
-                'missing' => 0,
-            ],
-        ];
-
-        $functions[] = [
-            'gauss' => [
-                '@timestamp' => [
-                    'offset' => '6h', // Do not decay until we reach this bound
-                    //'offset' => $opts['hoursAgo'] . 'h',
-                    'scale' => '24h', // Peak decay will be here
-                    //'scale' => '12h',
-                    //'decay' => rand(1, 9) / 10
-                ],
-            ],
-            'weight' => 10,
-        ];
+        $index = array_map(function ($type) {
+            return $this->config->get('elasticsearch')['indexes']['search_prefix'] . '-' . $type;
+        }, $types);
 
         $query = [
-            'index' => $this->config->get('elasticsearch')['index'],
-            'type' => $type,
+            'index' => $index,
             'body' =>  [
                 'query' => [
                     'function_score' => [
@@ -468,6 +497,7 @@ class Manager
         $response = $this->es->request($prepared);
 
         $trends = [];
+
         foreach ($response['hits']['hits'] as $doc) {
             $ownerGuid = $doc['_source']['owner_guid'];
 
@@ -499,7 +529,6 @@ class Manager
                 $title = strlen($entity->description) > 60 ? mb_substr($entity->description, 0, 60) . '...' : $entity->description;
             }
 
-            // If still no title, then skip
             if (!$title) {
                 continue;
             }
@@ -536,21 +565,65 @@ class Manager
      */
     public function getSearch(string $query, string $filter, string $type = 'activity', array $opts = []): Response
     {
+        $rows = $this->elasticFeedsManager->getList($this->getSearchOpts($query, $filter, $type, $opts));
+
+        $entities = new Response();
+        $entities = $entities->pushArray($rows->toArray());
+
+        if ($type === 'user') {
+            foreach ($entities as $feedItem) {
+                $entity = $feedItem->getEntity();
+                if ($entity && $entity instanceof User) {
+                    $entity->exportCounts = true;
+                }
+            }
+        }
+
+        return $entities;
+    }
+
+    /**
+     * Returns count of entities for a search query and filter
+     * @param string $query
+     * @param string $filter
+     * @param array $opts
+     * @return int
+     */
+    public function getSearchCount(string $query, string $filter, string $type = 'activity', array $opts = []): int
+    {
+        return $this->elasticFeedsManager->getCount($this->getSearchOpts($query, $filter, $type, array_merge([
+            'hide_own_posts' => true,
+            'reverse_sort' => true,
+        ], $opts)));
+    }
+    
+    /**
+     * Returns options for search list and count queries
+     * @param string $query
+     * @param string $filter
+     * @param array $opts
+     * @return array
+     */
+    private function getSearchOpts(string $query, string $filter, string $type = 'activity', array $opts = []): array
+    {
         $algorithm = 'latest';
         $opts = array_merge([
             'plus' => false,
             'nsfw' => [],
+            'hide_own_posts' => false,
+            'from_timestamp' => null,
+            'reverse_sort' => null,
         ], $opts);
 
         switch ($type) {
             case 'blogs':
-                $type = 'object:blog';
+                $type = 'object-blog';
                 break;
             case 'images':
-                $type = 'object:image';
+                $type = 'object-image';
                 break;
             case 'videos':
-                $type = 'object:video';
+                $type = 'object-video';
                 break;
             default:
                 $type = 'activity';
@@ -569,9 +642,7 @@ class Manager
                 break;
         }
 
-        $elasticEntities = new Core\Feeds\Elastic\Entities();
-
-        $opts = array_merge([
+        return array_merge([
             'cache_key' => $this->user ? $this->user->getGuid() : null,
             'access_id' => 2,
             'limit' => 300,
@@ -582,50 +653,53 @@ class Manager
             'period' => '1y',
             'query' => $query,
             'plus' => $opts['plus'],
-            'single_owner_threshold' => $filter === 'latest' ? 0 : 24
+            'single_owner_threshold' => $filter === 'latest' ? 0 : 24,
+            'hide_own_posts' => $opts['hide_own_posts'],
+            'from_timestamp' => $opts['from_timestamp'],
+            'reverse_sort' => $opts['reverse_sort'],
         ]);
-
-        $rows = $this->elasticFeedsManager->getList($opts);
-
-        $entities = new Response();
-        $entities = $entities->pushArray($rows->toArray());
-
-        if ($type === 'user') {
-            foreach ($entities as $entity) {
-                $entity->getEntity()->exportCounts = true;
-            }
-        }
-
-        return $entities;
     }
 
     /**
      * Returns the preferred and trending tags
      * @return array
      */
-    public function getTags(): array
+    public function getTags(array $opts = []): array
     {
+        $opts = array_merge([
+            'wire_support_tier' => null,
+            'trending_tags_v2' => false
+        ], $opts);
+
         $tagsList = $this->hashtagManager
             ->setUser($this->user)
             ->get([
                 'defaults' => true,
                 'trending' => true,
                 'limit' => 20,
+                'wire_support_tier' => $opts['wire_support_tier']
             ]);
 
         $tags = array_filter($tagsList, function ($tag) {
             return $tag['type'] === 'user';
         });
 
-        $trending = array_filter($tagsList, function ($tag) {
-            return $tag['type'] === 'trending' || $tag['type'] === 'default';
-        });
+        if ($opts['trending_tags_v2']) {
+            $trending = $this->trendingHashtagManager->getCurrentlyTrendingHashtags([
+                'limit' => $opts['limit'] ?? 20,
+                'plus' => $opts['plus'] ?? false,
+            ]);
+        } else {
+            $trending = array_filter($tagsList, function ($tag) {
+                return $tag['type'] === 'trending' || $tag['type'] === 'default';
+            });
+        }
 
         $default = $this->hashtagManager
             ->setUser($this->user)
             ->get([
                 'defaults' => true,
-                'limit' => 20,
+                'limit' => 24,
             ]);
 
         return [

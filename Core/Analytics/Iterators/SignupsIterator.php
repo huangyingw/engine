@@ -46,7 +46,6 @@ class SignupsIterator implements \Iterator
 
     /**
      * Fetch all the users who signed up
-     * @return array
      */
     protected function getUsers()
     {
@@ -72,12 +71,12 @@ class SignupsIterator implements \Iterator
             array_push($this->data, $user);
         }
 
-        if ($this->offset == end($users)->guid) {
+        if ($this->offset == end($guids)) {
             $this->valid = false;
             return;
         }
 
-        $this->offset = end($users)->guid;
+        $this->offset = end($guids);
     }
 
     /**

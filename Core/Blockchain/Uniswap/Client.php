@@ -5,6 +5,8 @@ use Brick\Math\BigDecimal;
 use Minds\Core\Di\Di;
 use Minds\Core\Http;
 use Minds\Core\Blockchain\Services\BlockFinder;
+use Minds\Core\Config\Config;
+use Minds\Exceptions\ServerErrorException;
 
 class Client
 {
@@ -14,13 +16,17 @@ class Client
     /** @var BlockFinder */
     protected $blockFinder;
 
+    /** @var Config */
+    protected $config;
+
     /** @var string */
     protected $graphqlEndpoint = "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v2";
 
-    public function __construct($http = null, BlockFinder $blockFinder = null)
+    public function __construct($http = null, BlockFinder $blockFinder = null, ?Config $config = null)
     {
         $this->http = $http ?: Di::_()->get('Http\Json');
         $this->blockFinder = $blockFinder ?? Di::_()->get('Blockchain\Services\BlockFinder');
+        $this->config = $config ?? Di::_()->get('Config');
     }
 
     /**
@@ -93,7 +99,7 @@ class Client
 
         $uniswapUser = new UniswapUserEntity();
         $uniswapUser->setId($response['user']['id'])
-            ->setUsdSwapped($response['user']['usdSwaped']);
+            ->setUsdSwapped($response['user']['usdSwaped'] ?? 0);
 
         // Liquidity Positions
 
@@ -164,13 +170,14 @@ class Client
      * Returns mints in descending order
      * TODO: add time params
      * @param array $paidIds
+     * @param int $skip - to use when iterating. function calls itself.
      * @return UniswapMintEntity[]
      */
-    public function getMintsByPairIds(array $pairIds = []): array
+    public function getMintsByPairIds(array $pairIds = [], int $skip = 0): array
     {
         $query = '
-            query($ids: [String!]) {
-                mints(where: { pair_in: $ids }, orderBy: timestamp, orderDirection: desc, first: 1000) {
+            query($ids: [String!], $skip: Int!) {
+                mints(where: { pair_in: $ids }, orderBy: timestamp, orderDirection: desc, first: 1000, skip: $skip) {
                     id
                     to
                     amount0
@@ -191,6 +198,7 @@ class Client
             'ids' => array_map(function ($id) {
                 return strtolower($id);
             }, $pairIds),
+            'skip' => $skip,
         ];
 
         $response = $this->request($query, $variables);
@@ -199,6 +207,10 @@ class Client
 
         foreach ($response['mints'] as $mint) {
             $mints[] = UniswapMintEntity::build($mint);
+        }
+
+        if (count($mints) >= 1000) {
+            array_push($mints, ...$this->getMintsByPairIds($pairIds, count($mints)));
         }
 
         return $mints;
@@ -229,7 +241,16 @@ class Client
         $response = $this->request($query, $variables);
 
         $ethUsd = BigDecimal::of($response['bundle']['ethPrice']);
-        $ethToken = BigDecimal::of($response['token']['derivedETH']);
+
+        $ethToken = null;
+
+        if ($response['token'] && $response['token']['derivedETH']) {
+            $ethToken = BigDecimal::of($response['token']['derivedETH']);
+        } elseif ($this->config->get('development_mode')) {
+            // Tokens in development mode are not mainnet, and aren't on Uniswap.
+            $ethToken = BigDecimal::of(1);
+        }
+
         $tokenUsd = $ethUsd->multipliedBy($ethToken);
 
         return [

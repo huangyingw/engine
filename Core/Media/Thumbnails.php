@@ -18,8 +18,15 @@ class Thumbnails
     /** @var Core\Media\Video\CloudflareStreams\Manager */
     protected $cloudflareStreamsManager;
 
-    public function __construct($config = null, $entitiesBuilder = null)
+    /** @var Wire\Paywall\Manager */
+    protected $paywallManager;
+
+    /** @var string */
+    const PAYWALL_BLUR = '/Assets/photos/paywall-blur.jpeg';
+
+    public function __construct($config = null, $entitiesBuilder = null, $cloudflareStreamsManager = null, $paywallManager = null)
     {
+        $this->paywallManager = $paywallManager ?? Di::_()->get('Wire\Paywall\Manager');
         $this->config = $config ?: Di::_()->get('Config');
         $this->entitiesBuilder = $entitiesBuilder ?: Di::_()->get('EntitiesBuilder');
         $this->cloudflareStreamsManager = $cloudflareStreamsManager ?? Di::_()->get('Media\Video\CloudflareStreams\Manager');
@@ -34,7 +41,8 @@ class Thumbnails
     public function get($entity, $size, $opts = [])
     {
         $opts = array_merge([
-            'bypassPaywall' => false,
+            'bypassPaywall' => false, // Bypasses payment amount check.
+            'unlockPaywall' => false // Stops blurred image being set.
         ], $opts);
 
         if (is_numeric($entity)) {
@@ -73,14 +81,21 @@ class Thumbnails
                     $thumbnail->setFilename($entity->filename);
                 }
 
+                if ($this->isLocked($entity) && !$opts['unlockPaywall']) {
+                    $thumbnail->setFilename($this->getDefaultBlurred());
+                    break;
+                }
+
                 if ($size && !$entity->gif) {
                     if (!isset($entity->batch_guid)) {
-                        $entity->batch_guid = $this->container_guid;
+                        $entity->batch_guid = $entity->container_guid;
                     }
 
                     $thumbnail->setFilename("image/$entity->batch_guid/$entity->guid/$size.jpg");
                 } elseif ($entity->gif) {
                     $thumbnail->setFilename(str_replace('xlarge.jpg', 'master.jpg', $entity->filename));
+                    // TODO: reactivate when resizing for GIFs has been reactivated in Entities/Image.php
+                    // $thumbnail->setFilename("image/$entity->batch_guid/$entity->guid/$size.jpg");
                 }
                 break;
 
@@ -116,5 +131,32 @@ class Thumbnails
         }
 
         return $thumbnail;
+    }
+
+    /**
+     * whether the entity is locked
+     * @param Entities\Entity $entity
+     * @return bool
+     */
+    public function isLocked($entity): bool
+    {
+        $isLocked = false;
+
+        if ($this->paywallManager->isPaywalled($entity) && !$entity instanceof Video) {
+            $isLocked = !$this->paywallManager
+                ->setUser(Core\Session::getLoggedInUser())
+                ->isAllowed($entity);
+        }
+
+        return $isLocked;
+    }
+
+    /**
+     * returns the default blurred image
+     * @return string the file
+     */
+    public function getDefaultBlurred(): string
+    {
+        return dirname(dirname(dirname(__FILE__))) . self::PAYWALL_BLUR;
     }
 }

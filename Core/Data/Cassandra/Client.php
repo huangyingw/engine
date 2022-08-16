@@ -35,15 +35,15 @@ class Client implements Interfaces\ClientInterface
     {
         $cql = $request->build();
         try {
-            $statement = $this->getSession()->prepare($cql['string']);
+            $statement = $this->getSession()->prepare($cql['string'], []);
             $future = $this->getSession()->executeAsync(
                 $statement,
-                @new Driver\ExecutionOptions(array_merge(
+                array_merge(
                     [
-                    'arguments' => $cql['values']
-                  ],
+                        'arguments' => $cql['values']
+                    ],
                     $request->getOpts()
-                ))
+                )
             );
             if ($silent) {
                 return $future;
@@ -93,6 +93,20 @@ class Client implements Interfaces\ClientInterface
         return Config::_()->get('multi')['prefix'];
     }
 
+
+    /**
+     * Get performance and diagnostic metrics.
+     * @return array Performance/Diagnostic metrics.
+     */
+    public function metrics(): array | null
+    {
+        try {
+            return $this->getSession()?->metrics();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     /**
      * Returns the session for the cassandra connection
      * @return Driver
@@ -109,6 +123,7 @@ class Client implements Interfaces\ClientInterface
                 ->withLatencyAwareRouting(true)
                 ->withDefaultConsistency(Driver::CONSISTENCY_LOCAL_QUORUM)
                 ->withRetryPolicy(new Driver\RetryPolicy\Logging($retry_policy))
+                ->withTokenAwareRouting(false) // makes initial connect fast
                 ->withPort(9042)
                 ->build();
 

@@ -12,9 +12,12 @@ use Minds\Api\Factory;
 use Minds\Core;
 use Minds\Core\Di\Di;
 use Minds\Core\Security;
+use Minds\Core\Security\TwoFactor\TwoFactorRequiredException;
 use Minds\Core\SMS\Exceptions\VoIpPhoneException;
+use Minds\Helpers\FormatPhoneNumber;
 use Minds\Entities;
 use Minds\Interfaces;
+use Zend\Diactoros\ServerRequestFactory;
 
 class twofactor implements Interfaces\Api
 {
@@ -51,9 +54,33 @@ class twofactor implements Interfaces\Api
             $pages[0] = '';
         }
 
+        $featuresManager = Di::_()->get('Features\Manager');
+        $twilioVerify = Di::_()->get('SMS\Twilio\Verify');
 
         switch ($pages[0]) {
             case "setup":
+                if ($featuresManager->has('twilio-verify')) {
+                    $number = FormatPhoneNumber::format($_POST['tel']);
+
+                    if (!$twilioVerify->verify($number)) {
+                        throw new VoIpPhoneException();
+                    }
+
+                    $twilioVerify->send($number, '');
+                    break;
+                }
+
+                try {
+                    $twoFactorManager = Di::_()->get('Security\TwoFactor\Manager');
+                    $twoFactorManager->gatekeeper(Core\Session::getLoggedinUser(), ServerRequestFactory::fromGlobals());
+                } catch (\Exception $e) {
+                    header('HTTP/1.1 ' . $e->getCode(), true, $e->getCode());
+                    $response['status'] = "error";
+                    $response['code'] = $e->getCode();
+                    $response['message'] = $e->getMessage();
+                    $response['errorId'] = str_replace('\\', '::', get_class($e));
+                    return Factory::response($response);
+                }
 
                 $secret = $twofactor->createSecret();
 
@@ -71,12 +98,8 @@ class twofactor implements Interfaces\Api
                     ]);
                 }
 
-                $message = 'Minds verification code: '. $twofactor->getCode($secret);
-                $number = $_POST['tel'];
-                
-                if ($number[0] !== '+') {
-                    $number = '+'.$number;
-                }
+                $message = 'Minds TwoFactor code: '. $twofactor->getCode($secret);
+                $number = FormatPhoneNumber::format($_POST['tel']);
 
                 if ($sms->send($number, $message)) {
                     $response['secret'] = $secret;
@@ -89,7 +112,21 @@ class twofactor implements Interfaces\Api
             case "check":
                 $secret = $_POST['secret'];
                 $code = $_POST['code'];
-                $telno = $_POST['telno'];
+                $telno = FormatPhoneNumber::format($_POST['telno']);
+
+                if ($featuresManager->has('twilio-verify')) {
+                    if ($twilioVerify->verifyCode($code, $telno)) {
+                        $user->twofactor = true;
+                        $user->telno = $telno;
+                    } else {
+                        $response['status'] = "error";
+                        $response['message'] = "2factor code failed";
+                        $user->twofactor = false;
+                    }
+                    $user->save();
+                    break;
+                }
+
                 if ($twofactor->verifyCode($secret, $code, 1)) {
                     $response['status'] = "success";
                     $response['message'] = "2factor now setup";

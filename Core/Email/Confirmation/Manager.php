@@ -22,7 +22,12 @@ use Minds\Entities\User;
 use Minds\Entities\UserFactory;
 
 class Manager
-{
+{    // timespan to check rate limit.
+    const RATE_LIMIT_TIMESPAN = 60;
+
+    // max amount of occurrence in timespan.
+    const RATE_LIMIT_MAX = 1;
+
     /** @var Config */
     protected $config;
 
@@ -47,6 +52,9 @@ class Manager
     /** @var User */
     protected $user;
 
+    /** @var KeyValueLimiter */
+    protected $kvLimiter;
+
     /**
      * Manager constructor.
      * @param Config $config
@@ -65,7 +73,8 @@ class Manager
         $elasticsearch = null,
         $userFactory = null,
         $resolver = null,
-        $eventsDispatcher = null
+        $eventsDispatcher = null,
+        $kvLimiter = null
     ) {
         $this->config = $config ?: Di::_()->get('Config');
         $this->jwt = $jwt ?: new Jwt();
@@ -74,6 +83,7 @@ class Manager
         $this->userFactory = $userFactory ?: new UserFactory();
         $this->resolver = $resolver ?: new Resolver();
         $this->eventsDispatcher = $eventsDispatcher ?: Di::_()->get('EventsDispatcher');
+        $this->kvLimiter = $kvLimiter ?? Di::_()->get("Security\RateLimits\KeyValueLimiter");
     }
 
     /**
@@ -99,21 +109,15 @@ class Manager
             throw new Exception('User email was already confirmed');
         }
 
-        $config = $this->config->get('email_confirmation');
+        // Can throw RateLimitException.
+        $this->kvLimiter
+            ->setKey('email-confirmation')
+            ->setValue($this->user->getGuid())
+            ->setSeconds(self::RATE_LIMIT_TIMESPAN)
+            ->setMax(self::RATE_LIMIT_MAX)
+            ->checkAndIncrement();
 
-        $now = time();
-        $expires = $now + $config['expiration'];
-
-        $token = $this->jwt
-            ->setKey($config['signing_key'])
-            ->encode([
-                'user_guid' => (string) $this->user->guid,
-                'code' => $this->jwt->randomString(),
-            ], $expires, $now);
-
-        $this->user
-            ->setEmailConfirmationToken($token)
-            ->save();
+        $this->generateConfirmationToken();
 
         $this->eventsDispatcher->trigger('confirmation_email', 'all', [
             'user_guid' => (string) $this->user->guid,
@@ -164,6 +168,10 @@ class Manager
             throw new Exception('Invalid JWT');
         }
 
+        if ($confirmation['exp'] < new \DateTime()) {
+            throw new Exception('Confirmation token expired');
+        }
+
         $user = $this->userFactory->build($confirmation['user_guid'], false);
 
         if (!$user || !$user->guid) {
@@ -183,6 +191,19 @@ class Manager
             throw new Exception('Invalid confirmation token data');
         }
 
+        $this->approveConfirmation($user);
+
+        return true;
+    }
+
+    /**
+     * Approve confirmation for a user. To be called only after validating a user
+     * is trustworthy, e.g. by validating their email.
+     * @param User $user - user to approve confirmation for.
+     * @return void
+     */
+    public function approveConfirmation(User $user): void
+    {
         $user
             ->setEmailConfirmationToken('')
             ->setEmailConfirmedAt(time())
@@ -199,8 +220,6 @@ class Manager
             ->send([
                 'user_guid' => (string) $user->guid,
             ]);
-
-        return true;
     }
 
     /**
@@ -229,8 +248,7 @@ class Manager
         ];
 
         $query = [
-            'index' => 'minds_badger',
-            'type' => 'user',
+            'index' => $this->config->get('elasticsearch')['indexes']['search_prefix'] . '-user',
             'body' => [
                 'query' => [
                     'bool' => [
@@ -263,5 +281,67 @@ class Manager
         }
 
         return $users;
+    }
+
+    /**
+     * Generates an email confirmation token and saves it to instance member user
+     * or returns an existing cached token.
+     * @return self
+     */
+    private function generateConfirmationToken(): self
+    {
+        $existingToken = $this->user->getEmailConfirmationToken();
+
+        // if existing token is valid, we do not need to generate a new one.
+        if ($existingToken && $this->isTokenValid($existingToken)) {
+            return $this;
+        }
+
+        $config = $this->config->get('email_confirmation');
+
+        $now = time();
+        $expires = $now + $config['expiration'];
+
+        $token = $this->jwt
+            ->setKey($config['signing_key'])
+            ->encode([
+                'user_guid' => (string) $this->user->guid,
+                'code' => $this->jwt->randomString(),
+            ], $expires, $now);
+
+        $this->user
+            ->setEmailConfirmationToken($token)
+            ->save();
+
+        return $this;
+    }
+
+    /**
+     * Determine whether email confirmation token is valid.
+     * @param string $jwt - jwt string to check validity of.
+     * @return boolean true if token is valid.
+     */
+    private function isTokenValid(string $jwt): bool
+    {
+        try {
+            $config = $this->config->get('email_confirmation');
+
+            // @throws Exception if invalid jwt.
+            $confirmation = $this->jwt
+                ->setKey($config['signing_key'])
+                ->decode($jwt);
+
+            if (
+                !$confirmation ||
+                !$confirmation['user_guid'] ||
+                !$confirmation['code']
+            ) {
+                throw new Exception('Invalid JWT');
+            }
+
+            return $confirmation['exp'] > new \DateTime();
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

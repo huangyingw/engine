@@ -2,16 +2,18 @@
 namespace Minds\Core\Media\Video\CloudflareStreams;
 
 use GuzzleHttp\Exception\ClientException;
-use Zend\Diactoros\ServerRequest;
-use Zend\Diactoros\Response\JsonResponse;
-use Minds\Core\EntitiesBuilder;
-use Minds\Core\Di\Di;
 use Minds\Core\Config;
+use Minds\Core\Di\Di;
 use Minds\Core\Entities\Actions\Save;
+use Minds\Core\EntitiesBuilder;
 use Minds\Core\Log;
+use Minds\Core\Media\Feeds;
+use Minds\Core\Media\Video\Transcoder\TranscodeStates;
 use Minds\Core\Security\ACL;
 use Minds\Entities\Video;
 use Minds\Exceptions\UserErrorException;
+use Zend\Diactoros\Response\JsonResponse;
+use Zend\Diactoros\ServerRequest;
 
 class Webhooks
 {
@@ -33,19 +35,29 @@ class Webhooks
     /** @var ACL */
     protected $acl;
 
-    public function __construct($client = null, $config = null, $entitiesBuilder = null, $save = null)
-    {
+    /** @var Feeds */
+    protected $feeds;
+
+    public function __construct(
+        $client = null,
+        $config = null,
+        $entitiesBuilder = null,
+        $save = null,
+        ?Feeds $feeds = null,
+        ?ACL $acl = null
+    ) {
         $this->client = $client ?? new Client();
         $this->config = $config ?? Di::_()->get('Config');
         $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
         $this->save = $save ?? new Save();
         $this->logger = $logger ?? Di::_()->get('Logger');
         $this->acl = $acl ?? Di::_()->get('Security\ACL');
+        $this->feeds = $feeds ?? Di::_()->get('Media\Feeds');
     }
 
     /**
      * Registers a webhook and returns the secrets.
-     * You must put this secret in settings.php (cloudflare->webhook_secrets)
+     * You must put this secret in settings.php (cloudflare->webhook_secret)
      * @return string
      */
     public function registerWebhook(): ?string
@@ -73,7 +85,51 @@ class Webhooks
      */
     public function onWebhook(ServerRequest $request): JsonResponse
     {
-        // Verify the webhook authenticity
+        $this->verifyWebhookAuthenticity($request);
+        
+        $body = $request->getParsedBody();
+        $guid = $body['meta']['guid'];
+        $transcodingState = $body['status']['state'];
+
+        $this->logger->info('CloudflareWebhook - Video ' . $guid);
+
+        $ia = $this->acl->setIgnore(true);
+
+        /** @var Video */
+        $video = $this->entitiesBuilder->single($guid);
+
+        if (!$video || !$video instanceof Video) {
+            $this->logger->error('Video not found');
+            throw new UserErrorException('Invalid video guid');
+        }
+
+        // Update the width / height
+        $video->width = $body['input']['width'];
+        $video->height = $body['input']['height'];
+
+        $video->setTranscodingStatus($transcodingState === 'ready' ? TranscodeStates::COMPLETED : TranscodeStates::FAILED);
+
+        $this->logger->info("Cloudflare webhook - height: $video->height width: $video->width transcodingState: $transcodingState");
+        $this->save
+            ->setEntity($video)
+            ->save();
+
+        // propagate properties from video to activity.
+        $this->feeds->setEntity($video)->updateActivities();
+
+        $this->acl->setIgnore($ia); // Set the ignore state back to what it was
+    
+        return new JsonResponse([ ]);
+    }
+
+    /**
+     * Verifies whether the webhook is authentic
+     * @param ServerRequest $request
+     * @throws UserErrorException
+     * @return void
+     */
+    private function verifyWebhookAuthenticity(ServerRequest $request): void
+    {
         $secret = $this->config->get('cloudflare')['webhook_secret'];
 
         $signature = $request->getHeader('Webhook-Signature');
@@ -95,36 +151,5 @@ class Webhooks
         }
 
         $this->logger->info('CloudflareWebhook - signature ok');
-
-        $body = $request->getParsedBody();
-
-        $guid = $body['meta']['guid'];
-
-        $this->logger->info('CloudflareWebhook - Video ' . $guid);
-
-        /** @var Video */
-        $video = $this->entitiesBuilder->single($guid);
-
-        if (!$video || !$video instanceof Video) {
-            $this->logger->error('Video not found');
-            throw new UserErrorException('Invalid video guid');
-        }
-
-        // Update the width / height
-
-        $video->width = $body['input']['width'];
-        $video->height = $body['input']['height'];
-
-        $this->logger->info("Cloudflare webhook - height: $video->height width: $video->width");
-
-        $ia = $this->acl->setIgnore(true);
-
-        $this->save
-            ->setEntity($video)
-            ->save();
-
-        $this->acl->setIgnore($ia); // Set the ignore state back to what it was
-    
-        return new JsonResponse([ ]);
     }
 }

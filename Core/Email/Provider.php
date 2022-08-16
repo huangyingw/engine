@@ -42,6 +42,10 @@ class Provider extends DiProvider
             return new V2\Common\EmailStyles();
         }, ['useFactory' => false]);
 
+        $this->di->bind('Email\V2\Common\EmailStylesV2', function ($di) {
+            return new V2\Common\EmailStylesV2();
+        }, ['useFactory' => false]);
+
         $this->di->bind('Email\CampaignLogs\Manager', function ($di) {
             return new CampaignLogs\Manager();
         }, ['useFactory' => true]);
@@ -52,6 +56,10 @@ class Provider extends DiProvider
 
         $this->di->bind('Email\Confirmation', function ($di) {
             return new Confirmation\Manager();
+        }, ['useFactory' => true]);
+
+        $this->di->bind('Email\Confirmation\Controller', function ($di) {
+            return new Confirmation\Controller();
         }, ['useFactory' => true]);
 
         $this->di->bind('Email\Confirmation\Url', function ($di) {

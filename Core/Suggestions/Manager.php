@@ -3,12 +3,13 @@
 namespace Minds\Core\Suggestions;
 
 use Minds\Common\Repository\Response;
+use Minds\Core\Config;
 use Minds\Core\Di\Di;
 use Minds\Core\EntitiesBuilder;
 use Minds\Core\Features;
-use Minds\Core\Suggestions\Delegates\CheckRateLimit;
 use Minds\Entities\User;
 use Minds\Core\Security\Block;
+use Minds\Core\Security\RateLimits\InteractionsLimiter;
 
 class Manager
 {
@@ -24,8 +25,8 @@ class Manager
     /** @var User $user */
     private $user;
 
-    /** @var CheckRateLimit */
-    private $checkRateLimit;
+    /** @var InteractionsLimiter */
+    private $interactionsLimiter;
 
     /** @var Features\Manager */
     private $features;
@@ -36,21 +37,26 @@ class Manager
     /** @var string $type */
     private $type = 'user';
 
-    public function __construct(
+    /** @var Config */
+    protected $config;
+
+    public function __construct(// @phpstan-ignore-line
         $repository = null,
         $entitiesBuilder = null,
         $suggestedFeedsManager = null,
         $subscriptionsManager = null,
-        $checkRateLimit = null,
-        $features = null
+        $interactionsLimiter = null,
+        $features = null,
+        Config $config = null
     ) {
         $this->repository = $repository ?: new Repository();
         $this->entitiesBuilder = $entitiesBuilder ?: new EntitiesBuilder();
         //$this->suggestedFeedsManager = $suggestedFeedsManager ?: Di::_()->get('Feeds\Suggested\Manager');
         $this->subscriptionsManager = $subscriptionsManager ?: Di::_()->get('Subscriptions\Manager');
-        $this->checkRateLimit = $checkRateLimit ?: new CheckRateLimit();
+        $this->interactionsLimiter = $interactionsLimiter ?: new InteractionsLimiter();
         $this->features = $features ?? new Features\Manager();
         $this->blockManager = $blockManager ?? Di::_()->get('Security\Block\Manager');
+        $this->config = $config ?? Di::_()->get('Config');
     }
 
     /**
@@ -100,19 +106,33 @@ class Manager
             'type' => $this->type,
         ], $opts);
 
-        if (!$this->checkRateLimit->check($this->user->guid)) {
+        if ($this->user && $this->isNearSubscriptionRateLimit()) {
             return new Response([]);
         }
 
-        $opts['user_guid'] = $this->user->getGuid();
-
         $opts['limit'] = $opts['limit'] * 3; // To prevent removed channels or closed groups
 
+        // if user set
+        if ($this->user) {
+            $opts['user_guid'] = $this->user->getGuid();
 
-        if ($this->subscriptionsManager->setSubscriber($this->user)
-            ->getSubscriptionsCount() > 1) {
-            $response = $this->repository->getList($opts);
+            // if user has more than 1 subscription.
+            if ($this->subscriptionsManager->setSubscriber($this->user)
+                ->getSubscriptionsCount() > 1
+            ) {
+                $response = $this->repository->getList($opts);
+
+                // fallback incase no users come back.
+                if ($response->count() < 1) {
+                    $response = $this->getFallbackSuggested($opts);
+                }
+            } else {
+                // else if a user has 1 or less subscriptions.
+                $opts['user_guid'] = null; // unset user_guid so we can recommend defaults.
+                $response = $this->getFallbackSuggested($opts);
+            }
         } else {
+            // if no user set - use fallback.
             $response = $this->getFallbackSuggested($opts);
         }
 
@@ -144,7 +164,7 @@ class Manager
             $blockEntry = (new Block\BlockEntry())
                 ->setActor($this->user)
                 ->setSubject($entity);
-            if ($this->blockManager->hasBlocked($blockEntry)) {
+            if ($this->blockManager->hasBlocked($blockEntry) || $this->blockManager->isBlocked($blockEntry)) {
                 return null;
             }
 
@@ -171,14 +191,14 @@ class Manager
     private function getFallbackSuggested($opts = [])
     {
         $opts = array_merge([
-            'user_guid' => $this->user->getGuid(),
+            'user_guid' => $this->user ? $this->user->getGuid() : '',
             'type' => 'user',
         ], $opts);
 
-        $response = new Response();
+        $recommendationsUserGuid = $this->config->get('default_recommendations_user') ?? '100000000000000519';
 
         $users = $this->subscriptionsManager->getList([
-            'guid' => '100000000000000519',
+            'guid' => (string) $recommendationsUserGuid,
             'type' => 'subscriptions',
             'hydrate' => false,
             'limit' => 500,
@@ -189,5 +209,15 @@ class Manager
         }, $users->toArray());
 
         return $this->repository->getList($opts);
+    }
+
+    /**
+     * Returns the smallest rate limit remaining attempts based on period.
+     * @return bool
+     */
+    private function isNearSubscriptionRateLimit()
+    {
+        $remainingAttempts = $this->interactionsLimiter->getRemainingAttempts((string) $this->user->getGuid(), 'subscribe');
+        return $remainingAttempts < 10;
     }
 }

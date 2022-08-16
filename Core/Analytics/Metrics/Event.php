@@ -2,11 +2,13 @@
 
 namespace Minds\Core\Analytics\Metrics;
 
+use Minds\Common\PseudonymousIdentifier;
 use Minds\Core;
+use Minds\Core\AccountQuality\ManagerInterface as AccountQualityManagerInterface;
 use Minds\Core\Analytics\Snowplow;
 use Minds\Core\Data\ElasticSearch;
-use Minds\Core\EntitiesBuilder;
 use Minds\Core\Di\Di;
+use Minds\Core\EntitiesBuilder;
 use Minds\Entities\User;
 
 /**
@@ -34,6 +36,7 @@ use Minds\Entities\User;
  * @method Event setReferrerGuid($referrerGuid)
  * @method Event setProReferrer(bool $proReferrer)
  * @method Event setIsRemind(bool $isRemind)
+ * @method Event setProofOfWork(bool $proofOfWork)
  */
 class Event
 {
@@ -49,18 +52,28 @@ class Event
     /** @var EntitiesBuilder */
     private $entitiesBuilder;
 
+    /** @var AccountQualityManagerInterface */
+    private $accountQualityManager;
+
     /** @var array */
     protected $data;
 
     /** @var User */
     protected $user;
 
-    public function __construct($elastic = null, $snowplowManager = null, $entitiesBuilder = null)
-    {
+    public function __construct(
+        $elastic = null,
+        $snowplowManager = null,
+        $entitiesBuilder = null,
+        AccountQualityManagerInterface $accountQualityManager = null,
+        protected ?PseudonymousIdentifier $pseudoId = null
+    ) {
         $this->elastic = $elastic ?: Core\Di\Di::_()->get('Database\ElasticSearch');
         $this->index = 'minds-metrics-'.date('m-Y', time());
         $this->snowplowManager = $snowplowManager ?? Di::_()->get('Analytics\Snowplow\Manager');
         $this->entitiesBuilder = $entitiesBuilder ?? Di::_()->get('EntitiesBuilder');
+        $this->accountQualityManager = $accountQualityManager ?? Di::_()->get('AccountQuality\Manager');
+        $this->pseudoId = $pseudoId ?? new PseudonymousIdentifier();
     }
 
     /**
@@ -99,6 +112,10 @@ class Event
 
         if ($this->user) {
             $this->data['user_is_plus'] = (bool) $this->user->isPlus();
+
+            if ($this->data['action']) {
+                $this->data['account_quality_score'] = $this->getAccountQualityScore();
+            }
         }
 
         $this->data['user_agent'] = $this->getUserAgent();
@@ -127,7 +144,6 @@ class Event
         $prepared->query([
             'body' => $this->data,
             'index' => $this->index,
-            'type' => $this->data['type'],
             //'id' => $data['guid'],
             'client' => [
                 'timeout' => 2,
@@ -213,9 +229,10 @@ class Event
 
         $entityContext = new Snowplow\Contexts\SnowplowEntityContext();
         $sessionContext = new Snowplow\Contexts\SnowplowSessionContext();
+        $proofOfWorkContext = new Snowplow\Contexts\SnowplowProofOfWorkContext();
+        $contexts = [ $entityContext, $sessionContext, $proofOfWorkContext ];
 
         $event = new Snowplow\Events\SnowplowActionEvent();
-        $event->setContext([$entityContext, $sessionContext]);
 
         $event->setAction($this->data['action']);
 
@@ -259,10 +276,31 @@ class Event
             $sessionContext->setUserPhoneNumberHash($this->data['user_phone_number_hash']);
         }
 
+        if ($this->data['proofOfWork'] ?? null) {
+            $proofOfWorkContext->setSuccessful($this->data['proofOfWork']);
+        }
+
         // Rebuild the user, as we need the full entity
+        
+        /** @var User */
         $user = $this->entitiesBuilder->single($this->data['user_guid']);
+
+
+        $event->setContext($contexts);
+
 
         // Emit the event
         $this->snowplowManager->setSubject($user)->emit($event);
+    }
+
+    /**
+     * Gets account quality score from manager.
+     * @return float account quality score.
+     */
+    protected function getAccountQualityScore(): float
+    {
+        return $this->accountQualityManager->getAccountQualityScoreAsFloat(
+            $this->pseudoId->getId() ?: $this->user->getGuid()
+        );
     }
 }

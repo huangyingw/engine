@@ -5,6 +5,7 @@ namespace Spec\Minds\Core\Analytics\Views;
 use Minds\Core\Analytics\Views\Manager;
 use Minds\Core\Analytics\Views\Repository;
 use Minds\Core\Analytics\Views\View;
+use Minds\Core\Feeds\Seen\Manager as SeenManager;
 use PhpSpec\ObjectBehavior;
 use Prophecy\Argument;
 
@@ -13,11 +14,16 @@ class ManagerSpec extends ObjectBehavior
     /** @var Repository */
     protected $repository;
 
+    /** @var SeenManager */
+    protected $seenManager;
+
     public function let(
-        Repository $repository
+        Repository $repository,
+        SeenManager $seenManager,
     ) {
-        $this->beConstructedWith($repository);
+        $this->beConstructedWith($repository, null, $seenManager);
         $this->repository = $repository;
+        $this->seenManager = $seenManager;
     }
 
     public function it_is_initializable()
@@ -47,6 +53,13 @@ class ManagerSpec extends ObjectBehavior
         $view->setTimestamp(Argument::type('int'))
             ->shouldBeCalled()
             ->willReturn($view);
+
+        $view->getEntityUrn()
+            ->shouldBeCalled()
+            ->willReturn("urn:activity:fakeguid");
+
+        $this->seenManager->seeEntities(["fakeguid"])
+            ->shouldBeCalled();
 
         $this->repository->add($view)
             ->shouldBeCalled()

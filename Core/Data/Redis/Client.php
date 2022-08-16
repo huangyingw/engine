@@ -11,7 +11,7 @@ class Client
 
     public function __construct($redis = null)
     {
-        $this->redis = $redis ?: class_exists('Redis') ? new \Redis : null;
+        $this->redis = $redis ?: (class_exists('Redis') ? new \Redis : null);
     }
 
     public function connect(...$args)
@@ -25,6 +25,26 @@ class Client
     public function get(...$args)
     {
         return $this->redis->get(...$args);
+    }
+
+    public function mget(...$args)
+    {
+        return $this->redis->mget(...$args);
+    }
+
+    public function multi(...$args)
+    {
+        return $this->redis->multi(...$args);
+    }
+
+    public function incr(...$args)
+    {
+        return $this->redis->incr(...$args);
+    }
+
+    public function expire(...$args)
+    {
+        return $this->redis->expire(...$args);
     }
 
     public function set(...$args)
@@ -52,6 +72,20 @@ class Client
         return $this->redis->sRem(...$args);
     }
 
+    public function exec(...$args)
+    {
+        return $this->redis->exec(...$args);
+    }
+
+    public function sScan(...$args)
+    {
+        return $this->redis->sScan(...$args);
+    }
+
+    public function info(...$args)
+    {
+        return $this->redis?->info(...$args);
+    }
 
     public function __call($function, $arguments)
     {

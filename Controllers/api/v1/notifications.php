@@ -82,13 +82,13 @@ class notifications implements Interfaces\Api
             default:
                 Factory::isLoggedIn();
 
-                if (!$offset) {
-                    $counters->resetCounter();
-                }
-
                 $limit = (int) static::getQueryValue('limit') ?: 12;
                 $offset = (string) static::getQueryValue('offset') ?: '';
                 $filter = $pages[0];
+
+                if (!$offset) {
+                    $counters->resetCounter();
+                }
 
                 if ($filter === 'list' || $filter === 'all') {
                     $filter = '';
@@ -137,28 +137,6 @@ class notifications implements Interfaces\Api
                 $settings->setToggle($_POST['id'], $_POST['toggle'])
                     ->setUserGuid(Core\Session::getLoggedinUser()->guid)
                     ->save();
-                break;
-            case "token":
-                $service = static::getPostValue('service', [ 'required' => true ]);
-                $passed_token = static::getPostValue('token', [ 'required' => true ]);
-
-                $token = \Surge\Token::create([
-                    'service' => $service,
-                    'token' => $passed_token
-                ]);
-
-                (new Core\Data\Call('entities'))
-                    ->insert(static::getCurrentUserGuid(), [ 'surge_token' => $token ]);
-                break;
-            case "test":
-                QueueClient::build()
-                    ->setQueue('Push')
-                    ->send([
-                        'user_guid' => Core\Session::getLoggedinUser()->guid,
-                        'uri' => $_POST['uri'] ?? 'https://www.minds.com/' . Core\Session::getLoggedinUser()->username,
-                        'title' => $_POST['title'] ?? 'Hello there',
-                        'message' => $_POST['message'] ?? 'This is a test',
-                    ]);
                 break;
         }
 
@@ -228,7 +206,6 @@ class notifications implements Interfaces\Api
                 'fromObj' => $fromObj ? $fromObj->export() : null,
                 'from_guid' => $entity->getFromGuid(),
                 'to' => $toObj ? $toObj->export() : null,
-                'guid' => $entity->getUuid(),
                 'notification_view' => $entity->getType(),
                 'params' => $data, // possibly some deeper polyfilling needed here,
                 'time_created' => $entity->getCreatedTimestamp(),

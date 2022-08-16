@@ -90,7 +90,7 @@ class EtherscanTransactionsByDate
      *
      * @param string $from
      * @param string $to
-     * @return void
+     * @return array
      */
     private function fetch($from, $to)
     {
@@ -110,7 +110,7 @@ class EtherscanTransactionsByDate
      *
      * @param integer $timestamp
      * @param array $data
-     * @return void
+     * @return array
      */
     public function search($timestamp, array $data)
     {
@@ -121,7 +121,7 @@ class EtherscanTransactionsByDate
      * Estimate block number by given timestamp
      *
      * @param integer $timestamp
-     * @return void
+     * @return int
      */
     public function estimateBlock($timestamp)
     {
@@ -149,7 +149,7 @@ class EtherscanTransactionsByDate
             $moreData = $this->fetch($lastBlockNumber + 1, $lastBlockNumber + 10001);
             $lastBlockNumber += 10001;
             // we stop if there is no more data
-            if (!$moreData || empty($moreData)) {
+            if (!$moreData) {
                 $noDataCount++;
                 if ($noDataCount < 10) {
                     continue;

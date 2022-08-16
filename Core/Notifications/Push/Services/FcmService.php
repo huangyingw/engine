@@ -1,9 +1,12 @@
 <?php
 namespace Minds\Core\Notifications\Push\Services;
 
-use Minds\Core\Notifications\Push\PushNotification;
+use Google\Exception;
 use Google_Client;
-use GuzzleHttp;
+use GuzzleHttp\Exception\GuzzleException;
+use Minds\Core\Notifications\Push\PushNotification;
+use Minds\Core\Notifications\Push\PushNotificationInterface;
+use Minds\Core\Notifications\Push\UndeliverableException;
 use Psr\Http\Message\ResponseInterface;
 
 class FcmService extends AbstractService implements PushServiceInterface
@@ -16,11 +19,15 @@ class FcmService extends AbstractService implements PushServiceInterface
         $this->googleClient = $googleClient ?? new Google_Client();
         parent::__construct(...$deps);
     }
+
     /**
      * @param PushNotification $pushNotification
      * @return bool
+     * @throws Exception
+     * @throws GuzzleException
+     * @throws UndeliverableException
      */
-    public function send(PushNotification $pushNotification): bool
+    public function send(PushNotificationInterface $pushNotification): bool
     {
         $body = [
             'message' => [
@@ -32,17 +39,25 @@ class FcmService extends AbstractService implements PushServiceInterface
                     'largeIcon' => $pushNotification->getIcon(),
                     'bigPicture' => $pushNotification->getMedia(),
                     'badge' => (string) $pushNotification->getUnreadCount(), // Has to be a string
+                    'user_guid' => $pushNotification->getUserGuid(),
                 ],
                 'token' => $pushNotification->getDeviceSubscription()->getToken(),
             ],
         ];
-        $this->request($body);
+        try {
+            $this->request($body);
+        } catch (\Exception $e) {
+            error_log($e->getMessage());
+            return false;
+        }
         return true;
     }
-    
+
     /**
      * @param array $body
      * @return ResponseInterface
+     * @throws GuzzleException
+     * @throws Exception
      */
     protected function request($body): ResponseInterface
     {

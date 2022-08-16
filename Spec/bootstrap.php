@@ -19,12 +19,21 @@ $minds = new Minds\Core\Minds();
 $CONFIG = Minds\Core\Di\Di::_()->get('Config');
 $CONFIG->default_access = 2;
 $CONFIG->site_guid = 0;
-$CONFIG->cassandra = new stdClass;
-$CONFIG->cassandra->keyspace = 'phpspec';
-$CONFIG->cassandra->servers = ['127.0.0.1'];
-$CONFIG->cassandra->cql_servers = ['127.0.0.1'];
-$CONFIG->cassandra->username = 'cassandra';
-$CONFIG->cassandra->password = 'cassandra';
+$CONFIG->cassandra = [
+    'keyspace' => 'phpspec',
+    'servers' => ['127.0.0.1'],
+    'cql_servers' => ['127.0.0.1'],
+    'username' => 'cassandra',
+    'password' => 'cassandra',
+];
+
+$CONFIG->elasticsearch = [
+    'hosts' => [ 'phpspec:9200' ],
+    'indexes' => [
+        'search_prefix' => 'minds-search',
+        'tags' => 'minds-hashtags',
+    ]
+];
 
 $CONFIG->payments = [
     'stripe' => [
@@ -36,8 +45,33 @@ $CONFIG->cypress = [
     'shared_key' => 'random-key',
 ];
 
+$CONFIG->pro = [
+    'stripe_account' => null
+];
+
 $CONFIG->plus = [
     'support_tier_urn' => 'plus_support_tier_urn',
 ];
+
+$CONFIG->snowplow = [
+    'collector_uri' => ''
+];
+
+$CONFIG->sessions = [
+    'public_key' => '/.dev/minds.pub',
+    'private_key' => '/.dev/minds.pem',
+];
+
+
+$CONFIG->redis = [
+    'master' => 'phpspec',
+    'slave' => 'phpspec'
+];
+
+$CONFIG->set('sockets', [
+    'jwt_secret' => 'secret',
+    'jwt_domain' => 'localhost:8080',
+    'server_uri' => 'localhost:8010'
+]);
 
 $minds->loadLegacy();

@@ -21,10 +21,6 @@ class PaymentsProvider extends Provider
             return new Repository();
         }, [ 'useFactory' => true ]);
 
-        $this->di->bind('Payments\Points', function ($di) {
-            return new Points\Manager();
-        });
-
         $this->di->bind('StripePayments', function ($di) {
             $config = $di->get('Config');
             return new Stripe\Stripe($di->get('Config'));
@@ -46,6 +42,14 @@ class PaymentsProvider extends Provider
 
         $this->di->bind('Stripe\Transactions\Manager', function ($di) {
             return new Stripe\Transactions\Manager();
+        }, ['useFactory'=>true]);
+
+        $this->di->bind('Stripe\PaymentMethods\Manager', function ($di) {
+            return new Stripe\PaymentMethods\Manager();
+        }, ['useFactory'=>true]);
+
+        $this->di->bind('Stripe\Customers\Manager', function ($di) {
+            return new Stripe\Customers\Manager();
         }, ['useFactory'=>true]);
     }
 }

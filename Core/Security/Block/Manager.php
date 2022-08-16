@@ -13,17 +13,23 @@ class Manager
     /** @var PsrWrapper */
     protected $cache;
 
-    /** @var Delegates\EventStreamsDelegate */
-    protected $eventStreamsDelegate;
-
     /** @var int */
     const CACHE_TTL = 86400; // 1 day
 
-    public function __construct(Repository $repository = null, PsrWrapper $cache = null, Delegates\EventStreamsDelegate $eventStreamsDelegate = null)
-    {
+    // No more than this qty of users may be blocked
+    /** @var int */
+    const BLOCK_LIMIT = 1000;
+
+    public function __construct(
+        Repository $repository = null,
+        PsrWrapper $cache = null,
+        protected ?Delegates\EventStreamsDelegate $eventStreamsDelegate = null,
+        protected ?Delegates\AnalyticsDelegate $analyticsDelegate = null
+    ) {
         $this->repository = $repository ?? new Repository();
         $this->cache = $cache ?? Di::_()->get('Cache\PsrWrapper');
-        $this->eventStreamsDelegate = $eventStreamsDelegate ?? new Delegates\EventStreamsDelegate();
+        $this->eventStreamsDelegate ??= new Delegates\EventStreamsDelegate();
+        $this->analyticsDelegate ??= new Delegates\AnalyticsDelegate();
     }
 
     /**
@@ -64,6 +70,16 @@ class Manager
      */
     public function add(BlockEntry $block): bool
     {
+        $userGuid = $block->getActorGuid();
+
+        $count = $this->repository->countList($userGuid);
+
+        $limit = static::BLOCK_LIMIT;
+
+        if ($count >= $limit) {
+            throw new BlockLimitException();
+        }
+
         /** @var bool */
         $success = $this->repository->add($block);
 
@@ -78,6 +94,9 @@ class Manager
 
         // Add to event stream
         $this->eventStreamsDelegate->onAdd($block);
+
+        // Add to analytics
+        $this->analyticsDelegate->onAdd($block);
 
         return true;
     }
@@ -104,6 +123,9 @@ class Manager
         // Add to event stream
         $this->eventStreamsDelegate->onDelete($block);
 
+        // Add to analytics
+        $this->analyticsDelegate->onDelete($block);
+
         return true;
     }
 
@@ -114,6 +136,10 @@ class Manager
      */
     public function isBlocked(BlockEntry $blockEntry): bool
     {
+        if (!$blockEntry->getSubjectGuid()) {
+            return false;
+        }
+
         $opts = new BlockListOpts();
         $opts->setUserGuid($blockEntry->getSubjectGuid());
 

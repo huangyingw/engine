@@ -101,9 +101,37 @@ class ControllersSpec extends ObjectBehavior
         ]));
     }
 
+
+
+    public function it_should_get_search_count_response(
+        ServerRequest $request
+    ) {
+        $request->getQueryParams()
+            ->willReturn([
+                'q' => 'hello world',
+                'algorithm' => 'latest',
+                'from_timestamp' => '1651152940243',
+            ]);
+
+        $this->manager->getSearchCount(Argument::any(), Argument::any(), Argument::any(), Argument::any())->willReturn(5);
+
+        $response = $this->getSearchCount($request);
+        $json = $response->getBody()->getContents();
+
+        $json->shouldBe(json_encode([
+            'status' => 'success',
+            'count' => 5
+        ]));
+    }
+
     public function it_should_get_tags_response(ServerRequest $request)
     {
-        $this->manager->getTags()
+        $opts = [
+            'wire_support_tier' => null,
+            'trending_tags_v2' => false,
+        ];
+
+        $this->manager->getTags($opts)
             ->willReturn([
                 'tags' => [
                     [
@@ -166,7 +194,12 @@ class ControllersSpec extends ObjectBehavior
 
     public function it_should_get_related_tags_response(ServerRequest $request)
     {
-        $this->manager->getTags()
+        $opts = [
+            'wire_support_tier' => null,
+            'trending_tags_v2' => false
+        ];
+
+        $this->manager->getTags($opts)
             ->willReturn([
                 'tags' => [
                 ],
@@ -181,6 +214,7 @@ class ControllersSpec extends ObjectBehavior
         $request->getQueryParams()
                 ->willReturn([
                     'entity_guid' => '123',
+                    'wire_support_tier' => null
                 ]);
 
         $this->manager->getActivityRelatedTags('123')

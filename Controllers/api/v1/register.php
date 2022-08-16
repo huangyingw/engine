@@ -9,9 +9,12 @@
 namespace Minds\Controllers\api\v1;
 
 use Minds\Api\Factory;
+use Minds\Common\PseudonymousIdentifier;
 use Minds\Core;
+use Minds\Core\Captcha\FriendlyCaptcha\Exceptions\InvalidSolutionException;
 use Minds\Core\Di\Di;
 use Minds\Entities\User;
+use Minds\Helpers\StringLengthValidators\UsernameLengthValidator;
 use Minds\Interfaces;
 
 class register implements Interfaces\Api, Interfaces\ApiIgnorePam
@@ -44,12 +47,11 @@ class register implements Interfaces\Api, Interfaces\ApiIgnorePam
             return Factory::response(['status' => 'error', 'message' => "Please fill out all the fields"]);
         }
 
+        // @throws StringLengthException
+        (new UsernameLengthValidator())->validate($_POST['username']);
+
         try {
-            $captcha = Core\Di\Di::_()->get('Captcha\Manager');
-            
-            if (isset($_POST['captcha']) && !$captcha->verifyFromClientJson($_POST['captcha'])) {
-                throw new \Exception('Captcha failed');
-            }
+            $this->checkCaptcha($_POST['captcha']);
 
             $ipHashVerify = Core\Di\Di::_()->get('Security\SpamBlocks\IPHash');
             if (!$ipHashVerify->isValid($_SERVER['HTTP_X_FORWARDED_FOR'])) {
@@ -76,15 +78,15 @@ class register implements Interfaces\Api, Interfaces\ApiIgnorePam
             }
 
             $user = register_user($_POST['username'], $_POST['password'], $_POST['username'], $_POST['email'], false);
+
+            if (!$user) {
+                return Factory::response(['status'=>'error', 'message' => "An unknown error occurred"]);
+            }
+
             $guid = $user->guid;
 
             // Hacky, move to service soon!
             $hasSignupTags = false;
-            if (isset($_COOKIE['mexp'])) {
-                $manager = Core\Di\Di::_()->get('Experiments\Manager');
-                $bucket = $manager->getBucketForExperiment('Homepage121119');
-                $user->expHomepage200619 = $bucket->getId();
-            }
 
             if (isset($_POST['parentId'])) {
                 $user->signupParentId = (string) $_POST['parentId'];
@@ -114,13 +116,19 @@ class register implements Interfaces\Api, Interfaces\ApiIgnorePam
                 return Factory::response(['status'=>'error', 'message' => "Please refresh your browser or update you app. We don't recognise your platform."]);
             }
 
+            $password = $_POST['password'];
+
             $params = [
                 'user' => $user,
-                'password' => $_POST['password'],
+                'password' => $password,
                 'friend_guid' => "",
                 'invitecode' => "",
                 'referrer' => isset($_COOKIE['referrer']) ? $_COOKIE['referrer'] : '',
             ];
+
+            (new PseudonymousIdentifier())
+                ->setUser($user)
+                ->generateWithPassword($password);
 
             // TODO: Move full reguster flow to the core
             elgg_trigger_plugin_hook('register', 'user', $params, true);
@@ -137,13 +145,15 @@ class register implements Interfaces\Api, Interfaces\ApiIgnorePam
                 'user' => $user->export(),
             ];
         } catch (\Exception $e) {
-            error_log(
-                "RegistrationError | username: ".$_POST['username']
-                .", email:".$_POST['email']
-                .", signupParentId".$user->signupParentId
-                .", exception: ".$e->getMessage()
-                .", addr: " . $_SERVER['HTTP_X_FORWARDED_FOR']
-            );
+            if (isset($user)) {
+                error_log(
+                    "RegistrationError | username: ".$_POST['username']
+                    .", email:".$_POST['email']
+                    .", signupParentId". $user->signupParentId
+                    .", exception: ".$e->getMessage()
+                    .", addr: " . $_SERVER['HTTP_X_FORWARDED_FOR']
+                );
+            }
             $response = ['status' => 'error', 'message' => $e->getMessage()];
         }
         return Factory::response($response);
@@ -155,5 +165,32 @@ class register implements Interfaces\Api, Interfaces\ApiIgnorePam
 
     public function delete($pages)
     {
+    }
+
+    /**
+     * Check CAPTCHA code is valid.
+     * @throws SolutionAlreadySeenException - If FriendlyCaptcha is enabled and individual solution has already been seen.
+     * @throws PuzzleReusedException - If FriendlyCaptcha is enabled and if proposed puzzle solution has been reused.
+     * @throws InvalidSolutionException - If solution is invalid.
+     * @param string $captcha - captcha to check.
+     * @return bool - true if captcha is valid. Will throw if invalid.
+     */
+    private function checkCaptcha(string $captcha): bool
+    {
+        if (
+            isset($_POST['friendly_captcha_enabled']) &&
+            $_POST['friendly_captcha_enabled']
+        ) {
+            $friendlyCaptchaManager = Di::_()->get('FriendlyCaptcha\Manager');
+            if (!$friendlyCaptchaManager->verify($captcha)) {
+                throw new InvalidSolutionException('Captcha failed');
+            }
+            return true;
+        }
+        $captchaManager = Core\Di\Di::_()->get('Captcha\Manager');
+        if ($captchaManager->verifyFromClientJson($captcha)) {
+            return true;
+        }
+        throw new InvalidSolutionException('Captcha failed');
     }
 }
