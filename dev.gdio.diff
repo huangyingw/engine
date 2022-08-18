@@ -1,14 +1,14 @@
 diff --git a/.gitignore b/.gitignore
-index c16ec1c87..e2b1faef3 100644
+index 8d6c43096..1537d287d 100644
 --- ./.gitignore
 +++ ./.gitignore
-@@ -31,3 +31,4 @@ coverage
+@@ -32,6 +32,7 @@ coverage
  composer.phar
  settings.php-*.bak
  !/.gitattributes
 +cassandra.log
 diff --git a/containers/installer/Dockerfile b/containers/installer/Dockerfile
-index 392d9af7f..a7fa22b7b 100644
+index 559140a99..047bfa858 100644
 --- ./containers/installer/Dockerfile
 +++ ./containers/installer/Dockerfile
 @@ -1,6 +1,6 @@
@@ -46,7 +46,7 @@ index b4f7d8f93..d5083fae6 100644
      mkdir /etc/supervisor && \
      mkdir /etc/supervisor/conf.d
 diff --git a/containers/php-runners/Dockerfile b/containers/php-runners/Dockerfile
-index 57c3864ae..e770cf272 100644
+index 4c9e92330..261e469e9 100644
 --- ./containers/php-runners/Dockerfile
 +++ ./containers/php-runners/Dockerfile
 @@ -10,7 +10,7 @@ ADD --chown=www-data . /var/www/Minds/engine
@@ -59,7 +59,7 @@ index 57c3864ae..e770cf272 100644
      mkdir /etc/supervisor && \
      mkdir /etc/supervisor/conf.d
 diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
-index 46a9b2f1d..03aeb4bae 100644
+index 0be830533..a337b0ad9 100644
 --- ./containers/php/Dockerfile
 +++ ./containers/php/Dockerfile
 @@ -1,15 +1,15 @@
@@ -81,7 +81,7 @@ index 46a9b2f1d..03aeb4bae 100644
      libzip \
      coreutils \
      imagemagick \
-@@ -27,7 +27,7 @@ RUN apk add --no-cache --virtual build-deps \
+@@ -29,7 +29,7 @@ RUN apk add --no-cache --virtual build-deps \
      && apk del build-deps
  
  # PECL Extensions
@@ -115,7 +115,7 @@ index 46a9b2f1d..03aeb4bae 100644
      && git clone https://github.com/zeromq/php-zmq.git $INSTALL_DIR \
      && cd $INSTALL_DIR \
      && phpize \
-@@ -90,7 +90,7 @@ RUN apk add --no-cache --virtual build-deps \
+@@ -113,7 +113,7 @@ RUN apk add --no-cache --virtual build-deps \
  
  # Install awscli (downstream containers require for the moment)
  
