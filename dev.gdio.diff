@@ -7,12 +7,15 @@ index 8d6c43096..1537d287d 100644
  settings.php-*.bak
  !/.gitattributes
 +cassandra.log
+ 
+ test_results.html
+ 
 diff --git a/containers/installer/Dockerfile b/containers/installer/Dockerfile
 index 559140a99..047bfa858 100644
 --- ./containers/installer/Dockerfile
 +++ ./containers/installer/Dockerfile
 @@ -1,6 +1,6 @@
- FROM minds/php:7.3
+ FROM minds/php:8.0
  
 -RUN apk update && apk add --no-cache --update git
 +RUN apk update && apk add  --update git
@@ -63,7 +66,7 @@ index 0be830533..a337b0ad9 100644
 --- ./containers/php/Dockerfile
 +++ ./containers/php/Dockerfile
 @@ -1,15 +1,15 @@
- FROM php:7.3-fpm-alpine3.10
+ FROM php:8.0-fpm-alpine3.15
  
 -RUN apk add --no-cache --update --virtual .php-deps make
 +RUN apk add --update make
@@ -89,19 +92,8 @@ index 0be830533..a337b0ad9 100644
 +RUN apk add  --virtual build-deps \
      $PHPIZE_DEPS \
      imagemagick-dev \
-     && pecl install mongodb \
-@@ -60,8 +60,8 @@ ENV BUILD_DEPS \
-     zlib-dev \
-     $PHPIZE_DEPS
- 
--RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
--    && apk add --no-cache libuv gmp \
-+RUN apk add  --virtual build-deps $BUILD_DEPS \
-+    && apk add  libuv gmp \
-     && git clone https://github.com/datastax/php-driver.git $INSTALL_DIR \
-     && cd $INSTALL_DIR \
-     && git reset --hard f73debf39e395817dd2ced76acfc64249d4d3a0a \
-@@ -73,11 +73,11 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+     && pecl install redis \
+@@ -96,11 +96,11 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
  
  # ZMQ extension
  ENV INSTALL_DIR /usr/src/php-zmq
