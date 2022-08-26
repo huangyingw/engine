@@ -1,6 +1,6 @@
 FROM php:8.0-fpm-alpine3.15
 
-RUN apk add --update make
+RUN apk add --update --virtual .php-deps make
 
 RUN apk add  --virtual build-deps \
     libzip-dev \
