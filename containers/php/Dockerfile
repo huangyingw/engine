@@ -60,8 +60,8 @@ ENV BUILD_DEPS \
     zlib-dev \
     $PHPIZE_DEPS
 
-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
-    && apk add --no-cache libuv gmp \
+RUN apk add  --virtual build-deps $BUILD_DEPS \
+    && apk add  libuv gmp \
     && git clone --branch=v1.3.x https://github.com/nano-interactive/php-driver.git $INSTALL_DIR \
     && cd $INSTALL_DIR \
     && git submodule update --init \
@@ -78,7 +78,7 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
     && rm -rf $INSTALL_DIR
 
 # blurhash extension
-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+RUN apk add  --virtual build-deps $BUILD_DEPS \
     && curl -fsSL 'https://gitlab.com/minds/php-ext-blurhash/-/archive/master/php_ext_blurhash-master.tar.gz' -o blurhash.tar.gz \
     && mkdir -p blurhash \
     && tar -xf blurhash.tar.gz -C blurhash --strip-components=1 \
@@ -140,7 +140,7 @@ ENV BUILD_DEPS \
     gtest-dev gmock \
     $PHPIZE_DEPS
 
-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+RUN apk add  --virtual build-deps $BUILD_DEPS \
     # PHP CPP
     && git clone https://github.com/Minds/PHP-CPP.git \
     && cd PHP-CPP \
@@ -166,7 +166,7 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
 RUN apk add protobuf-dev automake
 
 
-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+RUN apk add  --virtual build-deps $BUILD_DEPS \
     # libsecp256kq
     && git clone https://github.com/bitcoin-core/secp256k1.git \
     && cd secp256k1 \
