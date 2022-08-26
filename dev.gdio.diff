@@ -35,6 +35,19 @@ index b1f7e330c..3dcdc1bb7 100644
  
  # Copy config
  
+diff --git a/containers/php-fpm/Dockerfile.dev b/containers/php-fpm/Dockerfile.dev
+index 91fd8ee75..bcfcb8f52 100644
+--- ./containers/php-fpm/Dockerfile.dev
++++ ./containers/php-fpm/Dockerfile.dev
+@@ -5,7 +5,7 @@ RUN echo 'zend_extension=opcache.so' > /usr/local/etc/php/conf.d/opcache.ini \
+     && mkdir --parents --mode=0777 /data/
+ 
+ # Install xdebug
+-RUN apk add --no-cache $PHPIZE_DEPS \
++RUN apk add $PHPIZE_DEPS \
+     && pecl install xdebug \
+     && docker-php-ext-enable xdebug
+ 
 diff --git a/containers/php-guid/Dockerfile b/containers/php-guid/Dockerfile
 index b4f7d8f93..d5083fae6 100644
 --- ./containers/php-guid/Dockerfile
@@ -62,7 +75,7 @@ index 4c9e92330..261e469e9 100644
      mkdir /etc/supervisor && \
      mkdir /etc/supervisor/conf.d
 diff --git a/containers/php/Dockerfile b/containers/php/Dockerfile
-index 0be830533..a337b0ad9 100644
+index 0be830533..f56ad2523 100644
 --- ./containers/php/Dockerfile
 +++ ./containers/php/Dockerfile
 @@ -1,15 +1,15 @@
@@ -93,6 +106,26 @@ index 0be830533..a337b0ad9 100644
      $PHPIZE_DEPS \
      imagemagick-dev \
      && pecl install redis \
+@@ -60,8 +60,8 @@ ENV BUILD_DEPS \
+     zlib-dev \
+     $PHPIZE_DEPS
+ 
+-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+-    && apk add --no-cache libuv gmp \
++RUN apk add  --virtual build-deps $BUILD_DEPS \
++    && apk add  libuv gmp \
+     && git clone --branch=v1.3.x https://github.com/nano-interactive/php-driver.git $INSTALL_DIR \
+     && cd $INSTALL_DIR \
+     && git submodule update --init \
+@@ -78,7 +78,7 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+     && rm -rf $INSTALL_DIR
+ 
+ # blurhash extension
+-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
++RUN apk add  --virtual build-deps $BUILD_DEPS \
+     && curl -fsSL 'https://gitlab.com/minds/php-ext-blurhash/-/archive/master/php_ext_blurhash-master.tar.gz' -o blurhash.tar.gz \
+     && mkdir -p blurhash \
+     && tar -xf blurhash.tar.gz -C blurhash --strip-components=1 \
 @@ -96,11 +96,11 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
  
  # ZMQ extension
@@ -116,6 +149,24 @@ index 0be830533..a337b0ad9 100644
  
  # Build Pulsar
  
+@@ -140,7 +140,7 @@ ENV BUILD_DEPS \
+     gtest-dev gmock \
+     $PHPIZE_DEPS
+ 
+-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
++RUN apk add  --virtual build-deps $BUILD_DEPS \
+     # PHP CPP
+     && git clone https://github.com/Minds/PHP-CPP.git \
+     && cd PHP-CPP \
+@@ -166,7 +166,7 @@ RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
+ RUN apk add protobuf-dev automake
+ 
+ 
+-RUN apk add --no-cache --virtual build-deps $BUILD_DEPS \
++RUN apk add  --virtual build-deps $BUILD_DEPS \
+     # libsecp256kq
+     && git clone https://github.com/bitcoin-core/secp256k1.git \
+     && cd secp256k1 \
 diff --git a/containers/transcoder/Dockerfile b/containers/transcoder/Dockerfile
 index dad73cd64..64ffebf8e 100644
 --- ./containers/transcoder/Dockerfile
